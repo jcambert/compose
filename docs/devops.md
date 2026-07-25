@@ -36,6 +36,8 @@ The workflows use the current Node 24-compatible `actions/setup-node@v6` action 
 
 Linting uses `tsconfig.eslint.json`, a dedicated TypeScript project that includes both `src` and `tests`. The production build keeps using `tsconfig.json`, which only compiles the CLI sources into `dist`.
 
+Type checking runs with `exactOptionalPropertyTypes` enabled. Optional option objects must omit absent properties instead of passing properties explicitly set to `undefined`.
+
 The release workflow is tag-triggered and starts with `npm publish --dry-run`. Real publishing should only be enabled after `NPM_TOKEN` is configured.
 
 ## Documentation updates

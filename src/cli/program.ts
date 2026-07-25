@@ -5,9 +5,12 @@ import { buildComposeCommand } from '../compose/compose-command-builder.js';
 import { executeComposeCommand } from '../compose/compose-executor.js';
 import type { ComposeSubCommand } from '../compose/compose-command.js';
 import { createComposeProject } from '../project/project-factory.js';
+import type { CreateComposeProjectOptions } from '../project/project-factory.js';
 import { loadComposeProject, saveComposeProject } from '../project/project-store.js';
 import { addService, removeService, updateService } from '../project/service-mutator.js';
+import type { AddServiceOptions } from '../project/service-mutator.js';
 import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
+import type { ScanComposeFilesOptions } from '../scanner/compose-file-scanner.js';
 import { parseComposeDocument } from '../yaml/compose-parser.js';
 import { resolveComposeFilePath } from './project-resolver.js';
 
@@ -34,7 +37,7 @@ function registerScanCommand(program: Command): void {
     .option('--json', 'output JSON')
     .option('--max-depth <depth>', 'maximum recursive depth', parseInteger)
     .action(async (root: string, options: { json?: boolean; maxDepth?: number }) => {
-      const projects = await scanComposeFiles(root, { maxDepth: options.maxDepth });
+      const projects = await scanComposeFiles(root, createScanComposeFilesOptions(options.maxDepth));
 
       if (options.json === true) {
         console.log(JSON.stringify(projects, null, 2));
@@ -167,7 +170,7 @@ function registerProjectCommands(program: Command): void {
     .option('--name <name>', 'Compose project name')
     .option('--overwrite', 'overwrite an existing compose.yaml')
     .action(async (directory: string, options: { name?: string; overwrite?: boolean }) => {
-      const created = await createComposeProject(directory, options);
+      const created = await createComposeProject(directory, createComposeProjectOptions(options));
       console.log(`Created ${created.composeFilePath}`);
     });
 
@@ -196,7 +199,7 @@ function registerProjectCommands(program: Command): void {
           ...(options.env === undefined ? {} : { environment: toEnvironmentRecord(options.env) }),
           ...(options.dependsOn === undefined ? {} : { depends_on: options.dependsOn }),
         },
-        { overwrite: options.overwrite },
+        createAddServiceOptions(options.overwrite),
       );
       await saveComposeProject(projectModel);
       console.log(`Updated ${projectModel.composeFilePath}`);
@@ -295,6 +298,21 @@ async function executeAndPrint(request: {
   if (result.exitCode !== 0) {
     process.exitCode = result.exitCode;
   }
+}
+
+function createScanComposeFilesOptions(maxDepth: number | undefined): ScanComposeFilesOptions {
+  return maxDepth === undefined ? {} : { maxDepth };
+}
+
+function createComposeProjectOptions(options: { name?: string; overwrite?: boolean }): CreateComposeProjectOptions {
+  return {
+    ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+  };
+}
+
+function createAddServiceOptions(overwrite: boolean | undefined): AddServiceOptions {
+  return overwrite === undefined ? {} : { overwrite };
 }
 
 function parseInteger(value: string): number {

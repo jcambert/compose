@@ -1,0 +1,51 @@
+{
+  "name": "@jcambert/compose",
+  "version": "0.1.0",
+  "description": "Professional Node.js CLI for discovering, managing and executing Docker Compose projects.",
+  "type": "module",
+  "bin": {
+    "compose": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"import('node:fs/promises').then(fs => fs.rm('dist', { recursive: true, force: true }))\"",
+    "lint": "eslint .",
+    "start": "node dist/cli/index.js",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run lint && npm run typecheck && npm run test"
+  },
+  "engines": {
+    "node": ">=20.17.0"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
+    "commander": "^12.1.0",
+    "execa": "^9.5.0",
+    "yaml": "^2.7.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vitest": "^2.1.8"
+  },
+  "keywords": [
+    "docker",
+    "compose",
+    "docker-compose",
+    "cli",
+    "typescript"
+  ],
+  "license": "MIT"
+}

@@ -34,6 +34,8 @@ The CI workflow currently uses `npm install` because the first repository bootst
 
 The workflows use the current Node 24-compatible `actions/setup-node@v6` action while testing the package against Node.js 20 and Node.js 22.
 
+Linting uses `tsconfig.eslint.json`, a dedicated TypeScript project that includes both `src` and `tests`. The production build keeps using `tsconfig.json`, which only compiles the CLI sources into `dist`.
+
 The release workflow is tag-triggered and starts with `npm publish --dry-run`. Real publishing should only be enabled after `NPM_TOKEN` is configured.
 
 ## Documentation updates

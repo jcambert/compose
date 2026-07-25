@@ -30,6 +30,10 @@ Every push and pull request runs:
 4. tests with coverage
 5. build
 
+The CI workflow currently uses `npm install` because the first repository bootstrap does not yet contain a committed `package-lock.json`. Once the lock file is generated and committed, the workflow must be hardened back to `npm ci` with npm cache enabled.
+
+The workflows use the current Node 24-compatible `actions/setup-node@v6` action while testing the package against Node.js 20 and Node.js 22.
+
 The release workflow is tag-triggered and starts with `npm publish --dry-run`. Real publishing should only be enabled after `NPM_TOKEN` is configured.
 
 ## Documentation updates

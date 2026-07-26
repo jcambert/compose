@@ -27,6 +27,8 @@ export type StackBrowserOptions = {
   noAnsi?: boolean;
   projectName?: string;
   profile?: string[];
+  workspaceName?: string;
+  favoriteStackIds?: string[];
 };
 
 export type StackBrowserResult = {
@@ -45,15 +47,18 @@ export type StackBrowserDependencies = {
   scan?: (root: string, options: ScanComposeFilesOptions) => Promise<DiscoveredComposeProject[]>;
   execute?: (request: ComposeExecutionRequest) => Promise<ComposeExecutionResult>;
   readRuntimeStatus?: StackRuntimeStatusReader;
+  setFavorite?: (project: DiscoveredComposeProject, favorite: boolean) => Promise<void>;
+  recordRecent?: (project: DiscoveredComposeProject) => Promise<void>;
   print?: (message: string) => void;
   warn?: (message: string) => void;
 };
 
-type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh';
+type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh' | 'favorite';
 type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell';
 
 const stackActionChoices: PromptChoice[] = [
   createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),
+  createMenuChoice('★', 'Favorite', 'ajouter ou retirer des favoris', 'favorite'),
   createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),
   createMenuChoice('●', 'Status', 'docker compose ps', 'ps'),
   createMenuChoice('▶', 'Start', 'docker compose up -d', 'up'),
@@ -93,6 +98,7 @@ export async function browseComposeStacks(
   if (projects.length === 0) {
     printMenuPanel(dependencies, 'Compose Browser', [
       `Root: ${root}`,
+      ...(options.workspaceName === undefined ? [] : [`Workspace: ${options.workspaceName}`]),
       'No Docker Compose stacks found.',
     ]);
     return result;
@@ -101,6 +107,7 @@ export async function browseComposeStacks(
   printWarnings(projects, dependencies);
 
   let runtimeStatuses = await readRuntimeStatuses(projects, options, dependencies);
+  const favoriteStackIds = new Set(options.favoriteStackIds ?? []);
   let browsingStacks = true;
 
   while (browsingStacks) {
@@ -109,7 +116,7 @@ export async function browseComposeStacks(
     const projectId = await dependencies.prompts.select({
       message: 'Select a stack',
       choices: [
-        ...createStackChoices(projects, runtimeStatuses),
+        ...createStackChoices(projects, runtimeStatuses, favoriteStackIds),
         createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', stackBrowserValues.refresh),
         createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
       ],
@@ -133,7 +140,9 @@ export async function browseComposeStacks(
       continue;
     }
 
-    const stackResult = await browseStack(project, options, runtimeStatuses, dependencies);
+    await dependencies.recordRecent?.(project);
+
+    const stackResult = await browseStack(project, options, runtimeStatuses, favoriteStackIds, dependencies);
     result.executedActions += stackResult.executedActions;
     result.failedActions += stackResult.failedActions;
 
@@ -152,11 +161,31 @@ export async function browseComposeStacks(
 export function createStackChoices(
   projects: DiscoveredComposeProject[],
   runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus> = new Map<string, StackRuntimeStatus>(),
+  favoriteStackIds: ReadonlySet<string> | string[] = new Set<string>(),
 ): PromptChoice[] {
-  return projects.map((project, index) => ({
-    name: formatProjectChoice(project, index + 1, runtimeStatuses.get(project.id)),
+  const favoriteSet = toFavoriteSet(favoriteStackIds);
+
+  return sortProjectsForBrowser(projects, favoriteSet).map((project, index) => ({
+    name: formatProjectChoice(project, index + 1, runtimeStatuses.get(project.id), favoriteSet.has(project.relativePath)),
     value: project.id,
   }));
+}
+
+export function sortProjectsForBrowser(
+  projects: DiscoveredComposeProject[],
+  favoriteStackIds: ReadonlySet<string> | string[] = new Set<string>(),
+): DiscoveredComposeProject[] {
+  const favoriteSet = toFavoriteSet(favoriteStackIds);
+
+  return [...projects].sort((left, right) => {
+    const favoriteCompare = Number(favoriteSet.has(right.relativePath)) - Number(favoriteSet.has(left.relativePath));
+
+    if (favoriteCompare !== 0) {
+      return favoriteCompare;
+    }
+
+    return left.name.localeCompare(right.name) || left.relativePath.localeCompare(right.relativePath);
+  });
 }
 
 export function createStackBrowserExecutionRequest(
@@ -184,6 +213,7 @@ async function browseStack(
   project: DiscoveredComposeProject,
   options: StackBrowserOptions,
   runtimeStatuses: Map<string, StackRuntimeStatus>,
+  favoriteStackIds: Set<string>,
   dependencies: StackBrowserDependencies,
 ): Promise<StackBrowserResult> {
   const result: StackBrowserResult = {
@@ -213,6 +243,20 @@ async function browseStack(
     if (action === stackBrowserValues.refresh) {
       await refreshProjectRuntimeStatus(project, options, runtimeStatuses, dependencies);
       print(dependencies, 'Runtime status refreshed.');
+      continue;
+    }
+
+    if (action === 'favorite') {
+      const favorite = !favoriteStackIds.has(project.relativePath);
+
+      if (favorite) {
+        favoriteStackIds.add(project.relativePath);
+      } else {
+        favoriteStackIds.delete(project.relativePath);
+      }
+
+      await dependencies.setFavorite?.(project, favorite);
+      print(dependencies, favorite ? `Favorite added: ${project.name}` : `Favorite removed: ${project.name}`);
       continue;
     }
 
@@ -363,7 +407,7 @@ async function createStackActionRequest(
   options: StackBrowserOptions,
   dependencies: StackBrowserDependencies,
 ): Promise<ComposeExecutionRequest | undefined> {
-  if (action === 'services' || action === 'refresh') {
+  if (action === 'services' || action === 'refresh' || action === 'favorite') {
     return undefined;
   }
 
@@ -379,7 +423,7 @@ async function createStackActionRequest(
     }
   }
 
-  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh'>, ComposeExecutionRequest> = {
+  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh' | 'favorite'>, ComposeExecutionRequest> = {
     ps: createStackBrowserExecutionRequest(project, 'ps', [], options),
     up: createStackBrowserExecutionRequest(project, 'up', [], options, { detach: true }),
     build: createStackBrowserExecutionRequest(project, 'build', [], options),
@@ -398,7 +442,7 @@ function createServiceActionRequest(
   action: ServiceAction,
   options: StackBrowserOptions,
 ): ComposeExecutionRequest {
-  const commandByAction: Record<Exclude<ServiceAction, 'refresh'>, ComposeExecutionRequest> = {
+  const commandByAction: Record<ServiceAction, ComposeExecutionRequest> = {
     up: createStackBrowserExecutionRequest(project, 'up', [service], options, { detach: true }),
     build: createStackBrowserExecutionRequest(project, 'build', [service], options),
     stop: createStackBrowserExecutionRequest(project, 'stop', [service], options),
@@ -512,10 +556,16 @@ function createServiceChoice(serviceName: string, index: number, runtimeStatus: 
   return createMenuChoice(formatServiceStateIcon(runtimeStatus), `${index}. ${serviceName}`, formatServiceRuntimeSummary(runtimeStatus), serviceName);
 }
 
-function formatProjectChoice(project: DiscoveredComposeProject, index: number, runtimeStatus: StackRuntimeStatus | undefined): string {
+function formatProjectChoice(
+  project: DiscoveredComposeProject,
+  index: number,
+  runtimeStatus: StackRuntimeStatus | undefined,
+  favorite: boolean,
+): string {
   const detail = `${formatServiceCount(project.services.length)} · ${formatStackRuntimeLabel(project, runtimeStatus)} · ${project.relativePath}`;
+  const icon = favorite ? '★' : formatStackStateIcon(runtimeStatus);
 
-  return `${formatStackStateIcon(runtimeStatus)} ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;
+  return `${icon} ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;
 }
 
 function formatServiceCount(count: number): string {
@@ -574,6 +624,10 @@ function formatServiceStateIcon(runtimeStatus: ServiceRuntimeStatus | undefined)
   return icons[runtimeStatus.state];
 }
 
+function toFavoriteSet(favoriteStackIds: ReadonlySet<string> | string[]): ReadonlySet<string> {
+  return Array.isArray(favoriteStackIds) ? new Set(favoriteStackIds) : favoriteStackIds;
+}
+
 function printHomeMenu(
   root: string,
   projects: DiscoveredComposeProject[],
@@ -583,6 +637,7 @@ function printHomeMenu(
 ): void {
   printMenuPanel(dependencies, 'Compose Browser', [
     `Root: ${root}`,
+    ...(options.workspaceName === undefined ? [] : [`Workspace: ${options.workspaceName}`]),
     `Stacks: ${projects.length}`,
     `Runtime: ${formatRuntimeOverview(projects, runtimeStatuses)}`,
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,

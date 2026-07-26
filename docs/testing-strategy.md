@@ -26,6 +26,8 @@ Coverage includes executable core modules:
 
 Coverage excludes CLI wiring and source files that only export TypeScript types. Those files do not contain executable behaviour and should not make the coverage report artificially fail.
 
+Interactive stack browser workflows are covered with unit tests that inject fake prompt adapters, fake scan results and fake Compose executors. This keeps menu logic testable without running Docker or requiring a terminal session.
+
 ## Test categories
 
 ### Unit tests
@@ -43,6 +45,9 @@ Targets:
 - Guided option resolution with fake prompt adapters.
 - Guided safe defaults through `--guided --yes`.
 - Guided contradiction handling through `--guided --no-interactive`.
+- Interactive stack browser stack choices.
+- Interactive stack browser request generation.
+- Interactive stack and service action flows with fake prompts and fake execution.
 - Project creation and persistence.
 - Filesystem utilities.
 - Path resolution.
@@ -57,6 +62,7 @@ Targets:
 - Validate generated YAML.
 - Dry-run Compose execution.
 - Guided dry-run command resolution without running Docker.
+- Interactive browser dry-run command generation.
 
 ### Optional Docker tests
 

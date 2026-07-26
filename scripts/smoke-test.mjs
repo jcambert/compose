@@ -1,7 +1,8 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 
 const projectRoot = process.cwd();
 const cliEntrypoint = join(projectRoot, 'dist', 'cli', 'index.js');

@@ -9,7 +9,7 @@ import {
   stackBrowserValues,
 } from '../../src/interactive/stack-browser.js';
 import { createStackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
-import type { StackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
+import type { ServiceRuntimeStatus, StackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../../src/scanner/discovered-project.js';
 
 function createProject(overrides: Partial<DiscoveredComposeProject> = {}): DiscoveredComposeProject {
@@ -26,22 +26,27 @@ function createProject(overrides: Partial<DiscoveredComposeProject> = {}): Disco
 }
 
 function createRuntimeStatus(project: DiscoveredComposeProject = createProject()): StackRuntimeStatus {
-  return createStackRuntimeStatus(project, [
-    {
-      serviceName: 'api',
-      state: 'running',
-      containerCount: 1,
-      ports: ['0.0.0.0:3000->3000/tcp'],
-      containerNames: ['infra-api-1'],
-    },
-    {
-      serviceName: 'db',
+  const serviceStatuses: ServiceRuntimeStatus[] = project.services.map((serviceName) => {
+    if (serviceName === 'api') {
+      return {
+        serviceName: 'api',
+        state: 'running',
+        containerCount: 1,
+        ports: ['0.0.0.0:3000->3000/tcp'],
+        containerNames: ['infra-api-1'],
+      };
+    }
+
+    return {
+      serviceName,
       state: 'stopped',
       containerCount: 0,
       ports: [],
       containerNames: [],
-    },
-  ]);
+    };
+  });
+
+  return createStackRuntimeStatus(project, serviceStatuses);
 }
 
 function createRuntimeStatusMap(projects: DiscoveredComposeProject[]): Map<string, StackRuntimeStatus> {

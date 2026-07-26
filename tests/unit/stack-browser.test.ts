@@ -53,15 +53,15 @@ function createExecutionResult(request: ComposeExecutionRequest, exitCode = 0): 
 }
 
 describe('stack browser', () => {
-  it('creates readable stack choices from scan results', () => {
+  it('creates readable menu stack choices from scan results', () => {
     const choices = createStackChoices([
       createProject(),
-      createProject({ id: 'stack-2', relativePath: 'broken/compose.yaml', services: [], warnings: ['invalid yaml'] }),
+      createProject({ id: 'stack-2', name: 'broken', relativePath: 'broken/compose.yaml', services: [], warnings: ['invalid yaml'] }),
     ]);
 
     expect(choices).toEqual([
-      { name: 'infra/compose.yaml (api, db)', value: 'stack-1' },
-      { name: 'broken/compose.yaml (no services detected) — warnings', value: 'stack-2' },
+      { name: '▣ 1. infra           2 services · ready · infra/compose.yaml', value: 'stack-1' },
+      { name: '▣ 2. broken          no services · 1 warning(s) · broken/compose.yaml', value: 'stack-2' },
     ]);
   });
 
@@ -88,6 +88,29 @@ describe('stack browser', () => {
         detach: true,
       },
     });
+  });
+
+  it('prints a home menu before choosing a stack', async () => {
+    const printedMessages: string[] = [];
+    const project = createProject();
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([stackBrowserValues.quit]),
+        async scan() {
+          return [project];
+        },
+        print(message) {
+          printedMessages.push(message);
+        },
+      },
+    );
+
+    expect(printedMessages[0]).toContain('Compose Browser');
+    expect(printedMessages[0]).toContain('Stacks: 1');
+    expect(printedMessages[0]).toContain('Navigate with arrows');
   });
 
   it('executes a stack action selected from the interactive browser', async () => {
@@ -196,6 +219,6 @@ describe('stack browser', () => {
 
     expect(result.executedActions).toBe(1);
     expect(executedRequests).toHaveLength(0);
-    expect(printedMessages).toEqual(['docker compose -f /workspace/infra/compose.yaml up -d']);
+    expect(printedMessages).toContain('Preview: docker compose -f /workspace/infra/compose.yaml up -d');
   });
 });

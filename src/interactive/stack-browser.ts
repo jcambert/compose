@@ -40,27 +40,27 @@ type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' 
 type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell';
 
 const stackActionChoices: PromptChoice[] = [
-  { name: 'Inspecter les conteneurs de la stack (ps)', value: 'ps' },
-  { name: 'Démarrer la stack en arrière-plan (up -d)', value: 'up' },
-  { name: 'Builder toute la stack', value: 'build' },
-  { name: 'Stopper la stack', value: 'stop' },
-  { name: 'Redémarrer la stack', value: 'restart' },
-  { name: 'Afficher les logs de la stack', value: 'logs' },
-  { name: 'Descendre la stack (down)', value: 'down' },
-  { name: 'Explorer les services', value: 'services' },
-  { name: 'Retour à la liste des stacks', value: stackBrowserValues.back },
-  { name: 'Quitter', value: stackBrowserValues.quit },
+  createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),
+  createMenuChoice('●', 'Status', 'docker compose ps', 'ps'),
+  createMenuChoice('▶', 'Start', 'docker compose up -d', 'up'),
+  createMenuChoice('◆', 'Build', 'docker compose build', 'build'),
+  createMenuChoice('■', 'Stop', 'docker compose stop', 'stop'),
+  createMenuChoice('↻', 'Restart', 'docker compose restart', 'restart'),
+  createMenuChoice('◷', 'Logs', 'docker compose logs --tail 100', 'logs'),
+  createMenuChoice('⚠', 'Down', 'arrêter et retirer les conteneurs', 'down'),
+  createMenuChoice('←', 'Back', 'retour à la liste des stacks', stackBrowserValues.back),
+  createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
 ];
 
 const serviceActionChoices: PromptChoice[] = [
-  { name: 'Démarrer ce service (up -d)', value: 'up' },
-  { name: 'Builder ce service', value: 'build' },
-  { name: 'Stopper ce service', value: 'stop' },
-  { name: 'Redémarrer ce service', value: 'restart' },
-  { name: 'Afficher les logs de ce service', value: 'logs' },
-  { name: 'Ouvrir un shell sh dans ce service', value: 'shell' },
-  { name: 'Retour aux services', value: stackBrowserValues.back },
-  { name: 'Quitter', value: stackBrowserValues.quit },
+  createMenuChoice('▶', 'Start service', 'docker compose up -d <service>', 'up'),
+  createMenuChoice('◆', 'Build service', 'docker compose build <service>', 'build'),
+  createMenuChoice('■', 'Stop service', 'docker compose stop <service>', 'stop'),
+  createMenuChoice('↻', 'Restart service', 'docker compose restart <service>', 'restart'),
+  createMenuChoice('◷', 'Logs service', 'docker compose logs --tail 100 <service>', 'logs'),
+  createMenuChoice('▣', 'Shell', 'docker compose exec <service> sh', 'shell'),
+  createMenuChoice('←', 'Back', 'retour aux services', stackBrowserValues.back),
+  createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
 ];
 
 export async function browseComposeStacks(
@@ -76,22 +76,23 @@ export async function browseComposeStacks(
   };
 
   if (projects.length === 0) {
-    print(dependencies, 'No Docker Compose stacks found.');
+    printMenuPanel(dependencies, 'Compose Browser', [
+      `Root: ${root}`,
+      'No Docker Compose stacks found.',
+    ]);
     return result;
   }
 
-  for (const project of projects) {
-    for (const warning of project.warnings) {
-      warn(dependencies, `${project.relativePath}: ${warning}`);
-    }
-  }
+  printWarnings(projects, dependencies);
 
   let browsingStacks = true;
 
   while (browsingStacks) {
+    printHomeMenu(root, projects, options, dependencies);
+
     const projectId = await dependencies.prompts.select({
-      message: 'Sélectionne une stack Compose',
-      choices: [...createStackChoices(projects), { name: 'Quitter', value: stackBrowserValues.quit }],
+      message: 'Select a stack',
+      choices: [...createStackChoices(projects), createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit)],
     });
 
     if (projectId === stackBrowserValues.quit) {
@@ -123,8 +124,8 @@ export async function browseComposeStacks(
 }
 
 export function createStackChoices(projects: DiscoveredComposeProject[]): PromptChoice[] {
-  return projects.map((project) => ({
-    name: formatProjectChoice(project),
+  return projects.map((project, index) => ({
+    name: formatProjectChoice(project, index + 1),
     value: project.id,
   }));
 }
@@ -162,8 +163,10 @@ async function browseStack(
   let browsingStack = true;
 
   while (browsingStack) {
+    printStackMenu(project, options, dependencies);
+
     const action = await dependencies.prompts.select({
-      message: `Stack ${project.name} — choisis une action`,
+      message: 'Choose an action',
       choices: stackActionChoices,
     });
 
@@ -216,19 +219,24 @@ async function browseServices(
   };
 
   if (project.services.length === 0) {
-    print(dependencies, 'No services detected in this stack.');
+    printMenuPanel(dependencies, `Stack: ${project.name}`, [
+      'No services detected in this stack.',
+      `File: ${project.relativePath}`,
+    ]);
     return result;
   }
 
   let browsingServices = true;
 
   while (browsingServices) {
+    printServicesMenu(project, dependencies);
+
     const service = await dependencies.prompts.select({
-      message: `Stack ${project.name} — sélectionne un service`,
+      message: 'Select a service',
       choices: [
-        ...project.services.map((serviceName) => ({ name: serviceName, value: serviceName })),
-        { name: 'Retour à la stack', value: stackBrowserValues.back },
-        { name: 'Quitter', value: stackBrowserValues.quit },
+        ...project.services.map((serviceName, index) => createServiceChoice(serviceName, index + 1)),
+        createMenuChoice('←', 'Back', 'retour à la stack', stackBrowserValues.back),
+        createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
       ],
     });
 
@@ -271,8 +279,10 @@ async function browseService(
   let browsingService = true;
 
   while (browsingService) {
+    printServiceMenu(project, service, options, dependencies);
+
     const action = await dependencies.prompts.select({
-      message: `Service ${service} — choisis une action`,
+      message: 'Choose a service action',
       choices: serviceActionChoices,
     });
 
@@ -305,11 +315,12 @@ async function createStackActionRequest(
 
   if (action === 'down') {
     const confirmed = await dependencies.prompts.confirm({
-      message: `Confirmer l'arrêt complet de la stack ${project.name} avec docker compose down ?`,
+      message: `Confirmer docker compose down sur ${project.name} ?`,
       defaultValue: false,
     });
 
     if (!confirmed) {
+      print(dependencies, 'Action annulée.');
       return undefined;
     }
   }
@@ -354,7 +365,7 @@ async function executeBrowserRequest(
   result.executedActions += 1;
 
   if (request.options.dryRun === true) {
-    print(dependencies, buildComposeCommand(request).displayCommand);
+    print(dependencies, `Preview: ${buildComposeCommand(request).displayCommand}`);
     result.lastExitCode = 0;
     return;
   }
@@ -365,7 +376,10 @@ async function executeBrowserRequest(
   if (executionResult.exitCode !== 0) {
     result.failedActions += 1;
     warn(dependencies, `Command failed with exit code ${executionResult.exitCode}: ${executionResult.command}`);
+    return;
   }
+
+  print(dependencies, `Done: ${executionResult.command}`);
 }
 
 function createScanOptions(options: StackBrowserOptions): ScanComposeFilesOptions {
@@ -381,11 +395,99 @@ function createBaseComposeOptions(options: StackBrowserOptions): ComposeCommandO
   };
 }
 
-function formatProjectChoice(project: DiscoveredComposeProject): string {
-  const services = project.services.length === 0 ? 'no services detected' : project.services.join(', ');
-  const warnings = project.warnings.length === 0 ? '' : ' — warnings';
+function createMenuChoice(icon: string, label: string, hint: string, value: string): PromptChoice {
+  return {
+    name: `${icon} ${label.padEnd(18)} ${hint}`,
+    value,
+  };
+}
 
-  return `${project.relativePath} (${services})${warnings}`;
+function createServiceChoice(serviceName: string, index: number): PromptChoice {
+  return createMenuChoice('▣', `${index}. ${serviceName}`, 'service', serviceName);
+}
+
+function formatProjectChoice(project: DiscoveredComposeProject, index: number): string {
+  const status = project.warnings.length === 0 ? 'ready' : `${project.warnings.length} warning(s)`;
+  const detail = `${formatServiceCount(project.services.length)} · ${status} · ${project.relativePath}`;
+
+  return `▣ ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;
+}
+
+function formatServiceCount(count: number): string {
+  if (count === 0) {
+    return 'no services';
+  }
+
+  if (count === 1) {
+    return '1 service';
+  }
+
+  return `${count} services`;
+}
+
+function printHomeMenu(
+  root: string,
+  projects: DiscoveredComposeProject[],
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): void {
+  printMenuPanel(dependencies, 'Compose Browser', [
+    `Root: ${root}`,
+    `Stacks: ${projects.length}`,
+    `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
+    'Navigate with arrows, press Enter to select.',
+  ]);
+}
+
+function printStackMenu(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): void {
+  printMenuPanel(dependencies, `Stack: ${project.name}`, [
+    `File: ${project.relativePath}`,
+    `Services: ${project.services.length === 0 ? 'none detected' : project.services.join(', ')}`,
+    `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
+  ]);
+}
+
+function printServicesMenu(project: DiscoveredComposeProject, dependencies: StackBrowserDependencies): void {
+  printMenuPanel(dependencies, `Services: ${project.name}`, [
+    `File: ${project.relativePath}`,
+    `Available services: ${project.services.length}`,
+  ]);
+}
+
+function printServiceMenu(
+  project: DiscoveredComposeProject,
+  service: string,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): void {
+  printMenuPanel(dependencies, `Service: ${service}`, [
+    `Stack: ${project.name}`,
+    `File: ${project.relativePath}`,
+    `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
+  ]);
+}
+
+function printWarnings(projects: DiscoveredComposeProject[], dependencies: StackBrowserDependencies): void {
+  for (const project of projects) {
+    for (const warning of project.warnings) {
+      warn(dependencies, `${project.relativePath}: ${warning}`);
+    }
+  }
+}
+
+function printMenuPanel(dependencies: StackBrowserDependencies, title: string, lines: string[]): void {
+  const content = [
+    '',
+    '╭─ ' + title + ' ' + '─'.repeat(Math.max(1, 62 - title.length)),
+    ...lines.map((line) => `│ ${line}`),
+    '╰' + '─'.repeat(66),
+  ];
+
+  print(dependencies, content.join('\n'));
 }
 
 function print(dependencies: StackBrowserDependencies, message: string): void {

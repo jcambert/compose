@@ -59,6 +59,34 @@ compose browse C:\Sources --max-depth 8
 compose stacks . --dry-run
 ```
 
+The browser is menu-first and designed for day-to-day terminal usage:
+
+```text
+╭─ Compose Browser ──────────────────────────────────────────────
+│ Root: .
+│ Stacks: 3
+│ Mode: execute commands
+│ Navigate with arrows, press Enter to select.
+╰──────────────────────────────────────────────────────────────────
+? Select a stack
+  ▣ 1. infra           4 services · ready · infra/compose.yaml
+  ▣ 2. monitoring      2 services · ready · monitoring/compose.yml
+  ✕ Quit               fermer le browser
+```
+
+The stack and service menus use short action labels with command previews:
+
+```text
+▦ Services          explorer les services de cette stack
+● Status            docker compose ps
+▶ Start             docker compose up -d
+◆ Build             docker compose build
+■ Stop              docker compose stop
+↻ Restart           docker compose restart
+◷ Logs              docker compose logs --tail 100
+⚠ Down              arrêter et retirer les conteneurs
+```
+
 The browser lets you:
 
 - select a discovered stack from the scan result

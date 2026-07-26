@@ -24,18 +24,16 @@ chore/release-workflow
 
 Every push and pull request runs:
 
-1. dependency installation
+1. dependency installation from `package-lock.json` using `npm ci`
 2. security audit
 3. lint
 4. typecheck
 5. tests with coverage
 6. build
 
-The CI workflow currently uses `npm install` because the first repository bootstrap does not yet contain a committed `package-lock.json`. Once the lock file is generated and committed, the workflow must be hardened back to `npm ci` with npm cache enabled.
+The CI and release workflows use `actions/setup-node@v6` with npm cache enabled and `package-lock.json` as the cache dependency path.
 
-The workflows use the current Node 24-compatible `actions/setup-node@v6` action while testing the package against Node.js 20 and Node.js 22.
-
-The package requires Node.js `>=20.19.0`, which aligns with the current ESLint 10 runtime requirement. The CI matrix keeps testing against Node.js 20 and Node.js 22, but those aliases resolve to compatible latest patch versions on GitHub-hosted runners.
+The workflows test the package against Node.js 20 and Node.js 22. The package requires Node.js `>=20.19.0`, which aligns with the current ESLint 10 runtime requirement. GitHub-hosted runner aliases resolve to compatible latest patch versions.
 
 Security audit is part of the validation pipeline through `npm audit --audit-level=moderate`. Audit fixes must be reviewed explicitly when they require major upgrades; avoid applying `npm audit fix --force` blindly.
 
@@ -44,6 +42,18 @@ Linting uses `tsconfig.eslint.json`, a dedicated TypeScript project that include
 Type checking runs with `exactOptionalPropertyTypes` enabled. Optional option objects must omit absent properties instead of passing properties explicitly set to `undefined`.
 
 The release workflow is tag-triggered and starts with `npm publish --dry-run`. Real publishing should only be enabled after `NPM_TOKEN` is configured.
+
+## Dependency lock policy
+
+`package-lock.json` is committed and must stay synchronized with `package.json`.
+
+Rules:
+
+- Use `npm ci` for normal local validation and CI/CD.
+- Use `npm install` only when intentionally changing dependencies.
+- Commit `package.json` and `package-lock.json` together whenever dependency versions change.
+- Do not hand-edit `package-lock.json`.
+- Keep `npm audit --audit-level=moderate` green before merge.
 
 ## Documentation updates
 

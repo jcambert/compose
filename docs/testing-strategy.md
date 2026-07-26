@@ -19,6 +19,7 @@ Coverage includes executable core modules:
 
 - `scanner`
 - `compose`
+- `guided`
 - `project`
 - `yaml`
 - `utils`
@@ -38,6 +39,10 @@ Targets:
 - Service mutations.
 - Compose command generation.
 - Compose execution through injectable process runners.
+- Guided command descriptors.
+- Guided option resolution with fake prompt adapters.
+- Guided safe defaults through `--guided --yes`.
+- Guided contradiction handling through `--guided --no-interactive`.
 - Project creation and persistence.
 - Filesystem utilities.
 - Path resolution.
@@ -51,6 +56,7 @@ Targets:
 - Add and remove services.
 - Validate generated YAML.
 - Dry-run Compose execution.
+- Guided dry-run command resolution without running Docker.
 
 ### Optional Docker tests
 

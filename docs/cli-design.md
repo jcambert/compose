@@ -19,8 +19,8 @@ compose logs [services...]
 compose build [services...]
 compose pull [services...]
 compose restart [services...]
-compose exec <service> [command...]
-compose run <service> [command...]
+compose exec [service] [command...]
+compose run [service] [command...]
 
 compose project init <directory>
 compose project add-service <service>
@@ -28,6 +28,8 @@ compose project remove-service <service>
 compose project update-service <service>
 compose project validate
 ```
+
+`exec` and `run` accept an omitted service only when `--guided` is used. Without guided resolution, Docker Compose still needs a service name.
 
 ## Common Compose options
 
@@ -37,16 +39,16 @@ compose project validate
 --project-name <name>  Docker Compose project name
 --profile <profile>   Compose profile, repeatable
 --guided              ask useful questions before executing the command
---yes                 accept safe defaults and do not ask confirmation questions
+--yes                 accept safe guided defaults and do not ask questions
 --dry-run             print generated command without executing it
---no-interactive      disable all prompts, fail when required data is missing
+--no-interactive      disable all prompts and fail when guidance would be required
 ```
 
 ## Guided mode
 
-The CLI must be able to guide the user for each command and its options.
+The CLI can guide the user for each command and its options.
 
-Guided mode is designed for humans. Scripted mode is designed for CI, Makefiles and automation. Both modes must resolve to the same typed command request before execution.
+Guided mode is designed for humans. Scripted mode is designed for CI, Makefiles and automation. Both modes resolve to the same typed command request before execution.
 
 Examples:
 
@@ -57,32 +59,33 @@ compose up --project ./infra --guided
 Possible questions:
 
 ```text
-Start in detached mode? Yes
+Start containers in detached mode? Yes
 Build images before starting? No
 Remove orphan containers? Yes
-Scale a service? No
+Scale services? api=2
 ```
 
 Resulting command:
 
 ```bash
-compose up --project ./infra --detach --remove-orphans
+compose up --project ./infra --detach --remove-orphans --scale api=2
 ```
 
 Equivalent Docker command:
 
 ```bash
-docker compose -f ./infra/compose.yaml up -d --remove-orphans
+docker compose -f ./infra/compose.yaml up -d --remove-orphans --scale api=2
 ```
 
 ## Guidance rules
 
-- If the command is explicitly non-interactive, never ask questions.
-- If `--guided` is provided, ask useful option questions even when defaults exist.
-- If required data is missing in an interactive terminal, ask for it.
-- If required data is missing in non-interactive mode, fail with a clear error.
-- If `--yes` is provided, use safe defaults without asking confirmation questions.
-- The final resolved request must be printable with `--dry-run`.
+- If `--guided` is not provided, `compose` does not ask optional questions.
+- If `--guided` is provided, `compose` asks useful option questions and resolves missing command details when possible.
+- If `--guided --yes` is provided, `compose` applies safe descriptor defaults and does not ask questions.
+- If `--guided --no-interactive` is provided, the command fails because the requested behaviour is contradictory.
+- If a Compose file can be parsed, guided service selection uses the service names from the file.
+- If a required service is missing and no service list is available, guided mode asks for a service name as text.
+- The final resolved request remains printable with `--dry-run`.
 
 ## Command-specific options
 
@@ -97,7 +100,7 @@ docker compose -f ./infra/compose.yaml up -d --remove-orphans
 
 Guided questions:
 
-- Start in detached mode?
+- Start containers in detached mode?
 - Build images before starting?
 - Remove orphan containers?
 - Scale one or more services?
@@ -112,7 +115,7 @@ Guided questions:
 Guided questions:
 
 - Remove orphan containers?
-- Remove named volumes? This should be presented as a destructive option.
+- Remove named volumes? This is presented as a destructive option.
 
 ### `compose logs`
 
@@ -123,9 +126,9 @@ Guided questions:
 
 Guided questions:
 
+- Select one or more services, or leave empty for all services.
 - Follow log output?
 - Limit log lines?
-- Select one or more services?
 
 ### `compose build`
 
@@ -136,6 +139,7 @@ Guided questions:
 
 Guided questions:
 
+- Select one or more services, or leave empty for all services.
 - Build without cache?
 - Pull newer base images before building?
 
@@ -148,9 +152,10 @@ Guided questions:
 
 Guided questions:
 
+- Select the service when it was not provided on the command line.
+- Provide the command to run, or leave empty for the service default command.
 - Remove the container after run?
 - Add environment variables?
-- Provide the command to run?
 
 ### `compose exec`
 
@@ -162,8 +167,8 @@ Guided questions:
 
 Guided questions:
 
-- Select the service.
-- Provide the command to execute.
+- Select the service when it was not provided on the command line.
+- Provide the command to execute, defaulting to `sh`.
 - Add environment variables?
 - Run as a specific user?
 - Use a specific working directory?
@@ -177,9 +182,11 @@ compose scan C:\Sources --max-depth 8
 
 compose up --project ./infra -d
 compose up --project ./infra --guided
-compose logs --project ./infra api --follow --tail 100
-compose exec --project ./infra api sh
-compose run --project ./infra --rm worker npm run migrate
+compose up --project ./infra --guided --yes --dry-run
+compose logs --project ./infra --guided
+compose exec --project ./infra --guided
+compose run --project ./infra --guided
+compose down --project ./infra --guided
 compose down --project ./infra --remove-orphans
 ```
 
@@ -193,20 +200,6 @@ Initial actions:
 - `up -d`
 - `logs --follow`
 - `down`
-
-`compose select` should evolve into a guided command launcher. The user should be able to choose a project, choose a command, answer command-specific questions, preview the generated command, then execute it.
-
-## GUI readiness rule
-
-Prompt logic must not be hardcoded only in terminal commands. Each command should expose descriptors that can be used by:
-
-- the CLI prompt layer;
-- documentation generation;
-- future GUI forms;
-- tests;
-- dry-run previews.
-
-A future GUI should not need to reverse-engineer CLI flags. It should consume command descriptors, option descriptors and application services directly.
 
 ## Scriptability rule
 

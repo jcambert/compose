@@ -8,11 +8,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/{scanner,compose,project,yaml,utils}/**/*.ts'],
+      include: ['src/{scanner,compose,project,yaml,utils,guided}/**/*.ts'],
       exclude: [
         'src/cli/**',
         'src/compose/compose-command.ts',
         'src/compose/compose-options.ts',
+        'src/guided/guided-command-descriptor.ts',
         'src/project/compose-project.ts',
         'src/scanner/discovered-project.ts',
       ],

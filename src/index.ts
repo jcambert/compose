@@ -13,6 +13,8 @@ export * from './project/service-mutator.js';
 export * from './scanner/compose-file-patterns.js';
 export * from './scanner/compose-file-scanner.js';
 export * from './scanner/discovered-project.js';
+export * from './workspace/workspace-config.js';
+export * from './workspace/workspace-store.js';
 export * from './yaml/compose-parser.js';
 export * from './yaml/compose-validator.js';
 export * from './yaml/compose-writer.js';

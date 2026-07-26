@@ -39,7 +39,7 @@ compose project validate --project ./my-stack
 
 ## Technical stack
 
-- Node.js 20+
+- Node.js 20.19+
 - TypeScript
 - Commander for explicit command composition
 - `@inquirer/prompts` for interactive flows
@@ -79,6 +79,7 @@ npm install
 npm run build
 npm test
 npm run lint
+npm run audit
 npm run validate
 ```
 

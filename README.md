@@ -109,14 +109,23 @@ tests/
 
 ## Development
 
+Install dependencies from the committed lockfile:
+
 ```bash
-npm install
+npm ci
+```
+
+Run validation locally:
+
+```bash
 npm run build
 npm test
 npm run lint
 npm run audit
 npm run validate
 ```
+
+When intentionally changing dependencies, update `package.json`, regenerate `package-lock.json`, and commit both files together.
 
 For local CLI testing:
 

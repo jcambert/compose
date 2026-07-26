@@ -238,5 +238,9 @@ export function getGuidedCommandDescriptor(command: ComposeSubCommand): GuidedCo
 }
 
 export function getAllGuidedCommandDescriptors(): GuidedCommandDescriptor[] {
-  return Object.values(descriptors);
+  return Object.values(descriptors).filter(isGuidedCommandDescriptor);
+}
+
+function isGuidedCommandDescriptor(value: GuidedCommandDescriptor | undefined): value is GuidedCommandDescriptor {
+  return value !== undefined;
 }

@@ -13,6 +13,18 @@ The initial threshold is intentionally strict but realistic:
 
 Thresholds should be raised toward 100% as the command surface stabilises.
 
+## Coverage scope
+
+Coverage includes executable core modules:
+
+- `scanner`
+- `compose`
+- `project`
+- `yaml`
+- `utils`
+
+Coverage excludes CLI wiring and source files that only export TypeScript types. Those files do not contain executable behaviour and should not make the coverage report artificially fail.
+
 ## Test categories
 
 ### Unit tests
@@ -25,6 +37,9 @@ Targets:
 - YAML validation.
 - Service mutations.
 - Compose command generation.
+- Compose execution through injectable process runners.
+- Project creation and persistence.
+- Filesystem utilities.
 - Path resolution.
 
 ### Integration tests
@@ -50,6 +65,8 @@ COMPOSE_E2E_DOCKER=1 npm test
 ## Coverage discipline
 
 New code should come with tests in the same PR. If a task modifies documentation-visible behaviour, examples must be updated in README and docs before merge.
+
+A coverage failure must be fixed by adding meaningful tests first. Thresholds should only be changed when the project deliberately changes its coverage policy.
 
 ## Fixtures
 

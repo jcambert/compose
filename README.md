@@ -142,20 +142,34 @@ Stack and service menus include runtime context before asking for an action:
 ╰──────────────────────────────────────────────────────────────────
 ```
 
-The stack and service menus use short action labels with command previews:
+The stack and service menus are grouped into inspect, lifecycle, tools and danger-zone actions:
 
 ```text
-▦ Services          explorer les services de cette stack
-★ Favorite          ajouter ou retirer des favoris
-↻ Refresh           rafraîchir les statuts runtime
-● Status            docker compose ps
-▶ Start             docker compose up -d
-◆ Build             docker compose build
-■ Stop              docker compose stop
-↺ Restart           docker compose restart
-◷ Logs              docker compose logs --tail 100
-⚠ Down              arrêter et retirer les conteneurs
+▦ [Inspect] Services        explorer les services de cette stack
+★ [Inspect] Favorite        ajouter ou retirer des favoris
+↻ [Inspect] Refresh         rafraîchir les statuts runtime
+● [Inspect] Status          docker compose ps
+⚙ [Inspect] Config          docker compose config
+▣ [Inspect] Images          docker compose images
+▤ [Inspect] Top             docker compose top
+ℹ [Inspect] Version         docker compose version
+▶ [Lifecycle] Up            docker compose up -d
+◇ [Lifecycle] Create        docker compose create
+◆ [Lifecycle] Build         docker compose build
+▷ [Lifecycle] Start         docker compose start
+■ [Lifecycle] Stop          docker compose stop
+⏸ [Lifecycle] Pause         docker compose pause
+▶ [Lifecycle] Unpause       docker compose unpause
+↺ [Lifecycle] Restart       docker compose restart
+◷ [Tools] Logs              docker compose logs --tail 100
+🔌 [Tools] Port             docker compose port <service> <private-port>
+📋 [Tools] Copy file        docker compose cp <source> <target>
+☠ [Danger] Kill             docker compose kill
+🗑 [Danger] Remove           docker compose rm
+⚠ [Danger] Down             arrêter et retirer les conteneurs
 ```
+
+The service browser exposes the same operational surface for one service, including pause, unpause, kill, remove, logs, top, port and shell.
 
 The browser lets you:
 
@@ -163,16 +177,13 @@ The browser lets you:
 - keep favorite stacks at the top of the list
 - see running, stopped, unhealthy and unavailable runtime states
 - refresh runtime status without leaving the menu
-- inspect containers with `ps`
-- start a stack with `up -d`
-- build a stack
-- stop or restart a stack
-- show stack logs
+- inspect containers, images, config, top output and Compose version
+- run lifecycle actions such as up, create, build, start, stop, pause, unpause and restart
+- run tools such as logs, port lookup and file copy
 - open a nested service browser
-- start, build, stop, restart or show logs for a single service
 - open a shell with `docker compose exec <service> sh`
 
-Destructive stack actions such as `down` require an explicit confirmation. `--dry-run` prints the generated Docker command without executing it and does not call Docker for runtime status.
+Destructive actions such as `down`, `kill` and `rm` require an explicit confirmation. `kill` prompts for an optional signal, `rm` prompts for `--force`, `--stop` and `--volumes`, `port` prompts for a private port, and `cp` prompts for source and target. `--dry-run` prints the generated Docker command without executing it and does not call Docker for runtime status.
 
 ## Guided mode
 

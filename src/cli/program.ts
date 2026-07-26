@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { buildComposeCommand } from '../compose/compose-command-builder.js';
 import { executeComposeCommand } from '../compose/compose-executor.js';
 import type { ComposeSubCommand } from '../compose/compose-command.js';
+import { resolveGuidedCommand } from '../guided/guided-command-resolver.js';
 import { createComposeProject } from '../project/project-factory.js';
 import type { CreateComposeProjectOptions } from '../project/project-factory.js';
 import { loadComposeProject, saveComposeProject } from '../project/project-store.js';
@@ -13,6 +14,7 @@ import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
 import type { ScanComposeFilesOptions } from '../scanner/compose-file-scanner.js';
 import { parseComposeDocument } from '../yaml/compose-parser.js';
 import { resolveComposeFilePath } from './project-resolver.js';
+import { inquirerPromptAdapter } from './inquirer-prompt-adapter.js';
 
 export function createComposeCliProgram(): Command {
   const program = new Command();
@@ -142,22 +144,22 @@ function registerComposeExecutionCommands(program: Command): void {
     .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('restart', services, options));
 
   addComposeCommand(program, 'exec')
-    .argument('<service>')
+    .argument('[service]')
     .argument('[command...]')
     .option('-e, --env <env...>', 'set environment variables')
     .option('-u, --user <user>', 'run as specified user')
     .option('-w, --workdir <path>', 'working directory inside the container')
-    .action(async (service: string, commandArgs: string[], options: ComposeCliOptions) =>
-      runSimpleComposeCommand('exec', [service], options, commandArgs),
+    .action(async (service: string | undefined, commandArgs: string[], options: ComposeCliOptions) =>
+      runSimpleComposeCommand('exec', service === undefined ? [] : [service], options, commandArgs),
     );
 
   addComposeCommand(program, 'run')
-    .argument('<service>')
+    .argument('[service]')
     .argument('[command...]')
     .option('--rm', 'remove container after run')
     .option('-e, --env <env...>', 'set environment variables')
-    .action(async (service: string, commandArgs: string[], options: ComposeCliOptions) =>
-      runSimpleComposeCommand('run', [service], options, commandArgs),
+    .action(async (service: string | undefined, commandArgs: string[], options: ComposeCliOptions) =>
+      runSimpleComposeCommand('run', service === undefined ? [] : [service], options, commandArgs),
     );
 }
 
@@ -251,6 +253,9 @@ function addComposeCommand(program: Command, name: string): Command {
     .option('--file <path>', 'explicit Compose file')
     .option('--project-name <name>', 'Docker Compose project name')
     .option('--profile <profile...>', 'Compose profile')
+    .option('--guided', 'ask useful questions before executing the command')
+    .option('--yes', 'accept safe guided defaults without asking questions')
+    .option('--no-interactive', 'disable prompts and fail when guidance would be required')
     .option('--dry-run', 'print generated docker compose command')
     .option('--no-ansi', 'disable ANSI output from docker compose');
 }
@@ -262,13 +267,24 @@ async function runSimpleComposeCommand(
   passthroughArgs: string[] = [],
 ): Promise<void> {
   const composeFilePath = await resolveComposeFilePath(options.project, options.file);
+  const availableServices = await getAvailableServicesForGuidance(composeFilePath, options.guided === true);
+  const guided = await resolveGuidedCommand(
+    {
+      command,
+      options,
+      services,
+      passthroughArgs,
+      availableServices,
+    },
+    inquirerPromptAdapter,
+  );
 
   await executeAndPrint({
     command,
     composeFilePath,
-    services,
-    passthroughArgs,
-    options,
+    services: guided.services,
+    passthroughArgs: guided.passthroughArgs,
+    options: guided.options,
   });
 }
 
@@ -297,6 +313,19 @@ async function executeAndPrint(request: {
 
   if (result.exitCode !== 0) {
     process.exitCode = result.exitCode;
+  }
+}
+
+async function getAvailableServicesForGuidance(composeFilePath: string, guided: boolean): Promise<string[]> {
+  if (!guided) {
+    return [];
+  }
+
+  try {
+    const document = await parseComposeDocument(composeFilePath);
+    return Object.keys(document.services).sort();
+  } catch {
+    return [];
   }
 }
 
@@ -346,6 +375,9 @@ type ComposeCliOptions = {
   profile?: string[];
   dryRun?: boolean;
   noAnsi?: boolean;
+  guided?: boolean;
+  yes?: boolean;
+  interactive?: boolean;
   detach?: boolean;
   removeOrphans?: boolean;
   volumes?: boolean;

@@ -1,6 +1,6 @@
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { DiscoveredComposeProject } from '../../src/scanner/discovered-project.js';
 import { createEmptyWorkspaceConfig } from '../../src/workspace/workspace-config.js';
@@ -32,15 +32,17 @@ function createProject(overrides: Partial<DiscoveredComposeProject> = {}): Disco
 describe('workspace store', () => {
   it('adds, uses and removes named workspaces', () => {
     const now = new Date('2026-01-01T00:00:00.000Z');
-    const config = addWorkspace(createEmptyWorkspaceConfig(), 'dev', '/workspace', now);
+    const devWorkspacePath = resolve('/workspace');
+    const opsWorkspacePath = resolve('/ops');
+    const config = addWorkspace(createEmptyWorkspaceConfig(), 'dev', devWorkspacePath, now);
 
     expect(config.currentWorkspaceName).toBe('dev');
-    expect(config.workspaces.dev).toMatchObject({ name: 'dev', path: '/workspace' });
+    expect(config.workspaces.dev).toMatchObject({ name: 'dev', path: devWorkspacePath });
     expect(getCurrentWorkspace(config)?.name).toBe('dev');
 
-    const withSecondWorkspace = addWorkspace(config, 'ops', '/ops', now);
+    const withSecondWorkspace = addWorkspace(config, 'ops', opsWorkspacePath, now);
     const currentOps = useWorkspace(withSecondWorkspace, 'ops');
-    expect(getCurrentWorkspace(currentOps)?.path).toBe('/ops');
+    expect(getCurrentWorkspace(currentOps)?.path).toBe(opsWorkspacePath);
 
     const afterRemove = removeWorkspace(currentOps, 'ops');
     expect(afterRemove.currentWorkspaceName).toBe('dev');
@@ -49,7 +51,7 @@ describe('workspace store', () => {
 
   it('adds, removes and lists favorite stacks by workspace', () => {
     const project = createProject();
-    const baseConfig = addWorkspace(createEmptyWorkspaceConfig(), 'dev', '/workspace', new Date('2026-01-01T00:00:00.000Z'));
+    const baseConfig = addWorkspace(createEmptyWorkspaceConfig(), 'dev', resolve('/workspace'), new Date('2026-01-01T00:00:00.000Z'));
     const withFavorite = addFavoriteStack(baseConfig, 'dev', project, new Date('2026-01-01T00:00:00.000Z'));
 
     expect(getFavoriteStackIds(withFavorite, 'dev')).toEqual(['infra/compose.yaml']);
@@ -61,7 +63,7 @@ describe('workspace store', () => {
 
   it('records recent stacks without duplicating the same stack', () => {
     const project = createProject();
-    const baseConfig = addWorkspace(createEmptyWorkspaceConfig(), 'dev', '/workspace', new Date('2026-01-01T00:00:00.000Z'));
+    const baseConfig = addWorkspace(createEmptyWorkspaceConfig(), 'dev', resolve('/workspace'), new Date('2026-01-01T00:00:00.000Z'));
     const firstRecord = recordRecentStack(baseConfig, 'dev', project, new Date('2026-01-01T00:00:00.000Z'));
     const secondRecord = recordRecentStack(firstRecord, 'dev', project, new Date('2026-01-02T00:00:00.000Z'));
 
@@ -72,7 +74,7 @@ describe('workspace store', () => {
   it('persists config JSON to a local user config path', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'compose-workspace-'));
     const store = createWorkspaceStore(join(directory, 'config.json'));
-    const config = addWorkspace(createEmptyWorkspaceConfig(), 'dev', '/workspace', new Date('2026-01-01T00:00:00.000Z'));
+    const config = addWorkspace(createEmptyWorkspaceConfig(), 'dev', resolve('/workspace'), new Date('2026-01-01T00:00:00.000Z'));
 
     await store.save(config);
     const loaded = await store.load();

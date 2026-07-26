@@ -9,6 +9,7 @@ Rationale: the user types a command, so adding `cli` to the binary name is redun
 ## Command groups
 
 ```text
+compose doctor
 compose scan [root]
 compose select [root]
 compose browse [root]
@@ -75,6 +76,28 @@ When `compose browse` is called without `[root]`, it uses the current workspace 
 --dry-run             print generated command without executing it
 --no-interactive      disable all prompts and fail when guidance would be required
 ```
+
+## Diagnostics
+
+`compose doctor` validates whether the local machine can run the CLI comfortably.
+
+Checks:
+
+- Node.js version must be `20.19.0+`.
+- Docker CLI must be available unless `--skip-docker` is provided.
+- Docker Compose must respond through `docker compose version` unless `--skip-docker` is provided.
+- The local config directory must be readable and writable.
+- A current workspace should be configured.
+
+Options:
+
+```text
+--json         print the diagnostic report as JSON
+--strict       treat warnings as failures
+--skip-docker  skip Docker and Docker Compose checks
+```
+
+Standard mode fails on errors only. Strict mode fails on errors and warnings.
 
 ## Workspaces and favorites
 
@@ -284,6 +307,7 @@ Guided questions:
 ## Examples
 
 ```bash
+compose doctor
 compose workspace add dev C:\Sources
 compose workspace use dev
 compose browse

@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "docs"
   ],
   "scripts": {
@@ -20,7 +21,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "audit": "npm audit --audit-level=moderate",
-    "validate": "npm run lint && npm run typecheck && npm run test && npm run audit"
+    "smoke": "node scripts/smoke-test.mjs",
+    "pack:dry-run": "npm pack --dry-run",
+    "validate": "npm run lint && npm run typecheck && npm run test && npm run audit && npm run build && npm run smoke && npm run pack:dry-run"
   },
   "engines": {
     "node": ">=20.19.0"

@@ -51,3 +51,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Smoke CLI
+        run: npm run smoke
+
+      - name: Package dry-run
+        run: npm run pack:dry-run

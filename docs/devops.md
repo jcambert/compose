@@ -16,6 +16,7 @@ Examples:
 feature/compose-scanner
 feature/compose-executor
 feature/project-management
+feature/release-readiness
 fix/windows-path-resolution
 chore/release-workflow
 ```
@@ -30,6 +31,8 @@ Every push and pull request runs:
 4. typecheck
 5. tests with coverage
 6. build
+7. CLI smoke tests
+8. npm package dry-run
 
 The CI and release workflows use `actions/setup-node@v6` with npm cache enabled and `package-lock.json` as the cache dependency path.
 
@@ -41,7 +44,7 @@ Linting uses `tsconfig.eslint.json`, a dedicated TypeScript project that include
 
 Type checking runs with `exactOptionalPropertyTypes` enabled. Optional option objects must omit absent properties instead of passing properties explicitly set to `undefined`.
 
-The release workflow is tag-triggered and starts with `npm publish --dry-run`. Real publishing should only be enabled after `NPM_TOKEN` is configured.
+The release workflow validates the package, runs smoke tests and performs `npm pack --dry-run`. Publishing is prepared but remains explicit: run the workflow manually with `publish=true` after `NPM_TOKEN` is configured.
 
 ## Dependency lock policy
 
@@ -55,6 +58,29 @@ Rules:
 - Do not hand-edit `package-lock.json`.
 - Keep `npm audit --audit-level=moderate` green before merge.
 
+## Packaging policy
+
+The package must remain installable through the declared npm `bin` entry:
+
+```json
+{
+  "bin": {
+    "compose": "./dist/cli/index.js"
+  }
+}
+```
+
+`npm run smoke` validates the built CLI entrypoint and `npm run pack:dry-run` validates package contents before merge.
+
+Packaged files:
+
+- `dist`
+- `README.md`
+- `CHANGELOG.md`
+- `docs`
+
+Generated `dist` files must not be committed to the repository.
+
 ## Documentation updates
 
 Each completed task must update the related documentation before merge.
@@ -64,7 +90,7 @@ Examples:
 - Scanner behaviour changes update `docs/architecture.md` and README examples.
 - New CLI flags update `docs/cli-design.md`.
 - Test strategy changes update `docs/testing-strategy.md`.
-- Process changes update `docs/devops.md`.
+- Release process changes update `docs/release.md` and `docs/devops.md`.
 
 ## Definition of Done
 
@@ -81,17 +107,27 @@ A task is done when:
 Initial releases should follow semantic versioning:
 
 ```text
-v0.1.0  first usable discovery and command execution
+v0.1.0  first release-ready baseline
 v0.2.0  project and service management hardening
 v0.3.0  templates and advanced validation
 v1.0.0  stable command contract
 ```
+
+Release discipline:
+
+- work through PRs only
+- wait for green CI before merge
+- squash merge
+- do not rewrite `main` history
+- tag releases from `main`
+- run `compose doctor` on a real machine before npm publication
 
 ## Security practices
 
 - Avoid shell string concatenation; build argument arrays.
 - Keep `docker compose` execution explicit and visible.
 - Add dry-run support for safety.
+- Confirm destructive browser actions.
 - Validate YAML before writing.
 - Review npm dependencies before release.
 - Keep `npm audit --audit-level=moderate` green in CI.

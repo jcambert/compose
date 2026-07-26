@@ -26,11 +26,27 @@ compose favorites list
 
 compose up [services...]
 compose down
+compose create [services...]
+compose start [services...]
+compose stop [services...]
+compose restart [services...]
+compose pause [services...]
+compose unpause [services...]
+compose kill [services...]
+compose rm [services...]
 compose ps [services...]
 compose logs [services...]
 compose build [services...]
 compose pull [services...]
-compose restart [services...]
+compose config
+compose cp <source> <target>
+compose events [services...]
+compose images [services...]
+compose ls
+compose port <service> <private-port>
+compose top [services...]
+compose version
+compose watch [services...]
 compose exec [service] [command...]
 compose run [service] [command...]
 
@@ -156,27 +172,26 @@ Browser options:
 --no-ansi             disable ANSI output from docker compose
 ```
 
-Stack-level actions:
+Stack-level actions are grouped by category:
 
-- inspect containers with `ps`
-- start the full stack with `up -d`
-- build the full stack
-- stop the stack
-- restart the stack
-- show stack logs with a safe default tail
-- run `down` after explicit confirmation
-- toggle favorite state
-- refresh runtime status
-- enter the service browser
+- Inspect: services, favorite, refresh, `ps`, `config`, `images`, `top`, `version`.
+- Lifecycle: `up -d`, `create`, `build`, `start`, `stop`, `pause`, `unpause`, `restart`.
+- Tools: `logs --tail 100`, `port <service> <private-port>`, `cp <source> <target>`.
+- Danger: `kill`, `rm`, `down`.
 
-Service-level actions:
+Service-level actions are the same operational model scoped to one service:
 
-- start one service with `up -d <service>`
-- build one service
-- stop one service
-- restart one service
-- show service logs with a safe default tail
-- open a shell with `exec <service> sh`
+- Lifecycle: `up -d <service>`, `create <service>`, `build <service>`, `start <service>`, `stop <service>`, `pause <service>`, `unpause <service>`, `restart <service>`.
+- Tools: `logs --tail 100 <service>`, `top <service>`, `port <service> <private-port>`, `exec <service> sh`.
+- Danger: `kill <service>`, `rm <service>`.
+
+Browser prompt rules:
+
+- `down`, `kill` and `rm` require explicit confirmation.
+- `kill` prompts for an optional `--signal`.
+- `rm` prompts for `--force`, `--stop` and `--volumes`.
+- stack-level `port` prompts for service selection when several services are available and always prompts for the private port.
+- `cp` prompts for source and target paths.
 
 The browser is a terminal UX on top of the same scan and Compose execution primitives. It must not become the only way to perform an action; every generated action should remain scriptable through explicit commands.
 

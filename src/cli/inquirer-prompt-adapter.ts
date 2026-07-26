@@ -17,14 +17,14 @@ export const inquirerPromptAdapter: PromptAdapter = {
   },
 
   async checkbox(question: { message: string; choices: PromptChoice[] }): Promise<string[]> {
-    return checkbox({
+    return checkbox<string>({
       message: question.message,
       choices: question.choices,
     });
   },
 
   async select(question: { message: string; choices: PromptChoice[] }): Promise<string> {
-    return select({
+    return select<string>({
       message: question.message,
       choices: question.choices,
     });

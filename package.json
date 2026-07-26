@@ -19,10 +19,11 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "validate": "npm run lint && npm run typecheck && npm run test"
+    "audit": "npm audit --audit-level=moderate",
+    "validate": "npm run lint && npm run typecheck && npm run test && npm run audit"
   },
   "engines": {
-    "node": ">=20.17.0"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
@@ -32,13 +33,13 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
+    "@eslint/js": "^10.8.0",
     "@types/node": "^22.10.0",
-    "@vitest/coverage-v8": "^2.1.8",
-    "eslint": "^9.17.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.19.0",
-    "vitest": "^2.1.8"
+    "typescript-eslint": "^9.39.1",
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "docker",

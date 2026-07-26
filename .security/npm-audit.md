@@ -11,11 +11,24 @@ The report recommended forced upgrades that involve major versions. The remediat
 
 ## Remediation strategy
 
-- Upgrade ESLint and `@eslint/js` to the current major line that contains the advisory fix path.
-- Upgrade `typescript-eslint` to a line that supports ESLint 10.
-- Upgrade Vitest and `@vitest/coverage-v8` together so their versions stay aligned.
+- Upgrade ESLint to the current ESLint 10 line using a published npm version.
+- Pin `@eslint/js` to a published ESLint JavaScript package version instead of assuming it always has the same latest patch number as `eslint`.
+- Keep `typescript-eslint` on the latest published line that declares support for ESLint `^8.57.0 || ^9.0.0 || ^10.0.0`.
+- Upgrade Vitest and `@vitest/coverage-v8` together on the same published minor/patch line.
 - Raise the Node.js engine floor to `>=20.19.0`, matching the current ESLint 10 runtime requirement.
 - Add `npm audit --audit-level=moderate` to CI after dependency installation.
+
+## Current package pins
+
+```json
+{
+  "@eslint/js": "^10.0.1",
+  "eslint": "^10.7.0",
+  "typescript-eslint": "^8.65.0",
+  "vitest": "^4.1.9",
+  "@vitest/coverage-v8": "^4.1.9"
+}
+```
 
 ## Validation
 

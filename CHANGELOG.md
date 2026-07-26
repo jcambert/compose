@@ -8,6 +8,17 @@ The project follows a pragmatic semver policy:
 - minor releases add compatible user-facing commands or workflows
 - major releases introduce breaking command syntax or configuration changes
 
+## 0.1.2 - CLI package metadata fix
+
+### Fixed
+
+- `compose --version` now resolves the CLI version from `package.json` instead of using a hard-coded value.
+- Package metadata is aligned with the public npm package scope `@jc90100/compose`.
+
+### Added
+
+- Unit coverage that verifies the CLI program version uses the package metadata source.
+
 ## 0.1.0 - Release candidate
 
 ### Added

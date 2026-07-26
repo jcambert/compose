@@ -53,32 +53,103 @@ export type StackBrowserDependencies = {
   warn?: (message: string) => void;
 };
 
-type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh' | 'favorite';
-type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell';
+type StackAction =
+  | 'services'
+  | 'favorite'
+  | 'refresh'
+  | 'ps'
+  | 'config'
+  | 'images'
+  | 'top'
+  | 'version'
+  | 'up'
+  | 'create'
+  | 'build'
+  | 'start'
+  | 'stop'
+  | 'pause'
+  | 'unpause'
+  | 'restart'
+  | 'logs'
+  | 'port'
+  | 'cp'
+  | 'kill'
+  | 'rm'
+  | 'down';
+
+type ServiceAction =
+  | 'up'
+  | 'create'
+  | 'build'
+  | 'start'
+  | 'stop'
+  | 'pause'
+  | 'unpause'
+  | 'restart'
+  | 'logs'
+  | 'top'
+  | 'port'
+  | 'shell'
+  | 'kill'
+  | 'rm';
+
+type ExecutableStackAction = Exclude<StackAction, 'services' | 'refresh' | 'favorite'>;
+type StackActionRequestFactory = (
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+) => Promise<ComposeExecutionRequest | undefined>;
+
+type ServiceActionRequestFactory = (
+  project: DiscoveredComposeProject,
+  service: string,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+) => Promise<ComposeExecutionRequest | undefined>;
 
 const stackActionChoices: PromptChoice[] = [
-  createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),
-  createMenuChoice('★', 'Favorite', 'ajouter ou retirer des favoris', 'favorite'),
-  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),
-  createMenuChoice('●', 'Status', 'docker compose ps', 'ps'),
-  createMenuChoice('▶', 'Start', 'docker compose up -d', 'up'),
-  createMenuChoice('◆', 'Build', 'docker compose build', 'build'),
-  createMenuChoice('■', 'Stop', 'docker compose stop', 'stop'),
-  createMenuChoice('↺', 'Restart', 'docker compose restart', 'restart'),
-  createMenuChoice('◷', 'Logs', 'docker compose logs --tail 100', 'logs'),
-  createMenuChoice('⚠', 'Down', 'arrêter et retirer les conteneurs', 'down'),
+  createMenuChoice('▦', '[Inspect] Services', 'explorer les services de cette stack', 'services'),
+  createMenuChoice('★', '[Inspect] Favorite', 'ajouter ou retirer des favoris', 'favorite'),
+  createMenuChoice('↻', '[Inspect] Refresh', 'rafraîchir les statuts runtime', 'refresh'),
+  createMenuChoice('●', '[Inspect] Status', 'docker compose ps', 'ps'),
+  createMenuChoice('⚙', '[Inspect] Config', 'docker compose config', 'config'),
+  createMenuChoice('▣', '[Inspect] Images', 'docker compose images', 'images'),
+  createMenuChoice('▤', '[Inspect] Top', 'docker compose top', 'top'),
+  createMenuChoice('ℹ', '[Inspect] Version', 'docker compose version', 'version'),
+  createMenuChoice('▶', '[Lifecycle] Up', 'docker compose up -d', 'up'),
+  createMenuChoice('◇', '[Lifecycle] Create', 'docker compose create', 'create'),
+  createMenuChoice('◆', '[Lifecycle] Build', 'docker compose build', 'build'),
+  createMenuChoice('▷', '[Lifecycle] Start', 'docker compose start', 'start'),
+  createMenuChoice('■', '[Lifecycle] Stop', 'docker compose stop', 'stop'),
+  createMenuChoice('⏸', '[Lifecycle] Pause', 'docker compose pause', 'pause'),
+  createMenuChoice('▶', '[Lifecycle] Unpause', 'docker compose unpause', 'unpause'),
+  createMenuChoice('↺', '[Lifecycle] Restart', 'docker compose restart', 'restart'),
+  createMenuChoice('◷', '[Tools] Logs', 'docker compose logs --tail 100', 'logs'),
+  createMenuChoice('🔌', '[Tools] Port', 'docker compose port <service> <private-port>', 'port'),
+  createMenuChoice('📋', '[Tools] Copy file', 'docker compose cp <source> <target>', 'cp'),
+  createMenuChoice('☠', '[Danger] Kill', 'docker compose kill', 'kill'),
+  createMenuChoice('🗑', '[Danger] Remove', 'docker compose rm', 'rm'),
+  createMenuChoice('⚠', '[Danger] Down', 'arrêter et retirer les conteneurs', 'down'),
   createMenuChoice('←', 'Back', 'retour à la liste des stacks', stackBrowserValues.back),
   createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
 ];
 
 const serviceActionChoices: PromptChoice[] = [
-  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),
-  createMenuChoice('▶', 'Start service', 'docker compose up -d <service>', 'up'),
-  createMenuChoice('◆', 'Build service', 'docker compose build <service>', 'build'),
-  createMenuChoice('■', 'Stop service', 'docker compose stop <service>', 'stop'),
-  createMenuChoice('↺', 'Restart service', 'docker compose restart <service>', 'restart'),
-  createMenuChoice('◷', 'Logs service', 'docker compose logs --tail 100 <service>', 'logs'),
-  createMenuChoice('▣', 'Shell', 'docker compose exec <service> sh', 'shell'),
+  createMenuChoice('↻', '[Inspect] Refresh', 'rafraîchir les statuts runtime', 'refresh'),
+  createMenuChoice('▶', '[Lifecycle] Up service', 'docker compose up -d <service>', 'up'),
+  createMenuChoice('◇', '[Lifecycle] Create service', 'docker compose create <service>', 'create'),
+  createMenuChoice('◆', '[Lifecycle] Build service', 'docker compose build <service>', 'build'),
+  createMenuChoice('▷', '[Lifecycle] Start service', 'docker compose start <service>', 'start'),
+  createMenuChoice('■', '[Lifecycle] Stop service', 'docker compose stop <service>', 'stop'),
+  createMenuChoice('⏸', '[Lifecycle] Pause service', 'docker compose pause <service>', 'pause'),
+  createMenuChoice('▶', '[Lifecycle] Unpause service', 'docker compose unpause <service>', 'unpause'),
+  createMenuChoice('↺', '[Lifecycle] Restart service', 'docker compose restart <service>', 'restart'),
+  createMenuChoice('◷', '[Tools] Logs service', 'docker compose logs --tail 100 <service>', 'logs'),
+  createMenuChoice('▤', '[Tools] Top service', 'docker compose top <service>', 'top'),
+  createMenuChoice('🔌', '[Tools] Port service', 'docker compose port <service> <private-port>', 'port'),
+  createMenuChoice('▣', '[Tools] Shell', 'docker compose exec <service> sh', 'shell'),
+  createMenuChoice('☠', '[Danger] Kill service', 'docker compose kill <service>', 'kill'),
+  createMenuChoice('🗑', '[Danger] Remove service', 'docker compose rm <service>', 'rm'),
   createMenuChoice('←', 'Back', 'retour aux services', stackBrowserValues.back),
   createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
 ];
@@ -393,7 +464,12 @@ async function browseService(
       continue;
     }
 
-    const request = createServiceActionRequest(project, service, action as ServiceAction, options);
+    const request = await createServiceActionRequest(project, service, action as ServiceAction, options, dependencies);
+
+    if (request === undefined) {
+      continue;
+    }
+
     await executeBrowserRequest(request, result, dependencies);
     await refreshProjectRuntimeStatusAfterExecution(project, options, runtimeStatuses, dependencies, request.options.dryRun === true);
   }
@@ -411,47 +487,237 @@ async function createStackActionRequest(
     return undefined;
   }
 
-  if (action === 'down') {
-    const confirmed = await dependencies.prompts.confirm({
-      message: `Confirmer docker compose down sur ${project.name} ?`,
-      defaultValue: false,
-    });
-
-    if (!confirmed) {
-      print(dependencies, 'Action annulée.');
-      return undefined;
-    }
-  }
-
-  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh' | 'favorite'>, ComposeExecutionRequest> = {
-    ps: createStackBrowserExecutionRequest(project, 'ps', [], options),
-    up: createStackBrowserExecutionRequest(project, 'up', [], options, { detach: true }),
-    build: createStackBrowserExecutionRequest(project, 'build', [], options),
-    stop: createStackBrowserExecutionRequest(project, 'stop', [], options),
-    restart: createStackBrowserExecutionRequest(project, 'restart', [], options),
-    logs: createStackBrowserExecutionRequest(project, 'logs', [], options, { tail: '100' }),
-    down: createStackBrowserExecutionRequest(project, 'down', [], options),
-  };
-
-  return commandByAction[action];
+  return stackActionRequestFactories[action](project, options, dependencies);
 }
 
-function createServiceActionRequest(
+async function createServiceActionRequest(
   project: DiscoveredComposeProject,
   service: string,
   action: ServiceAction,
   options: StackBrowserOptions,
-): ComposeExecutionRequest {
-  const commandByAction: Record<ServiceAction, ComposeExecutionRequest> = {
-    up: createStackBrowserExecutionRequest(project, 'up', [service], options, { detach: true }),
-    build: createStackBrowserExecutionRequest(project, 'build', [service], options),
-    stop: createStackBrowserExecutionRequest(project, 'stop', [service], options),
-    restart: createStackBrowserExecutionRequest(project, 'restart', [service], options),
-    logs: createStackBrowserExecutionRequest(project, 'logs', [service], options, { tail: '100' }),
-    shell: createStackBrowserExecutionRequest(project, 'exec', [service], options, {}, ['sh']),
-  };
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  return serviceActionRequestFactories[action](project, service, options, dependencies);
+}
 
-  return commandByAction[action];
+const stackActionRequestFactories: Record<ExecutableStackAction, StackActionRequestFactory> = {
+  ps: async (project, options) => createStackBrowserExecutionRequest(project, 'ps', [], options),
+  config: async (project, options) => createStackBrowserExecutionRequest(project, 'config', [], options),
+  images: async (project, options) => createStackBrowserExecutionRequest(project, 'images', [], options),
+  top: async (project, options) => createStackBrowserExecutionRequest(project, 'top', [], options),
+  version: async (project, options) => createStackBrowserExecutionRequest(project, 'version', [], options),
+  up: async (project, options) => createStackBrowserExecutionRequest(project, 'up', [], options, { detach: true }),
+  create: async (project, options) => createStackBrowserExecutionRequest(project, 'create', [], options),
+  build: async (project, options) => createStackBrowserExecutionRequest(project, 'build', [], options),
+  start: async (project, options) => createStackBrowserExecutionRequest(project, 'start', [], options),
+  stop: async (project, options) => createStackBrowserExecutionRequest(project, 'stop', [], options),
+  pause: async (project, options) => createStackBrowserExecutionRequest(project, 'pause', [], options),
+  unpause: async (project, options) => createStackBrowserExecutionRequest(project, 'unpause', [], options),
+  restart: async (project, options) => createStackBrowserExecutionRequest(project, 'restart', [], options),
+  logs: async (project, options) => createStackBrowserExecutionRequest(project, 'logs', [], options, { tail: '100' }),
+  port: createStackPortActionRequest,
+  cp: createCopyActionRequest,
+  kill: createStackKillActionRequest,
+  rm: createStackRemoveActionRequest,
+  down: createStackDownActionRequest,
+};
+
+const serviceActionRequestFactories: Record<ServiceAction, ServiceActionRequestFactory> = {
+  up: async (project, service, options) => createStackBrowserExecutionRequest(project, 'up', [service], options, { detach: true }),
+  create: async (project, service, options) => createStackBrowserExecutionRequest(project, 'create', [service], options),
+  build: async (project, service, options) => createStackBrowserExecutionRequest(project, 'build', [service], options),
+  start: async (project, service, options) => createStackBrowserExecutionRequest(project, 'start', [service], options),
+  stop: async (project, service, options) => createStackBrowserExecutionRequest(project, 'stop', [service], options),
+  pause: async (project, service, options) => createStackBrowserExecutionRequest(project, 'pause', [service], options),
+  unpause: async (project, service, options) => createStackBrowserExecutionRequest(project, 'unpause', [service], options),
+  restart: async (project, service, options) => createStackBrowserExecutionRequest(project, 'restart', [service], options),
+  logs: async (project, service, options) => createStackBrowserExecutionRequest(project, 'logs', [service], options, { tail: '100' }),
+  top: async (project, service, options) => createStackBrowserExecutionRequest(project, 'top', [service], options),
+  port: createServicePortActionRequest,
+  shell: async (project, service, options) => createStackBrowserExecutionRequest(project, 'exec', [service], options, {}, ['sh']),
+  kill: createServiceKillActionRequest,
+  rm: createServiceRemoveActionRequest,
+};
+
+async function createStackDownActionRequest(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const confirmed = await confirmDangerAction(project, dependencies, 'docker compose down');
+  return confirmed ? createStackBrowserExecutionRequest(project, 'down', [], options) : undefined;
+}
+
+async function createStackKillActionRequest(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const confirmed = await confirmDangerAction(project, dependencies, 'docker compose kill');
+
+  if (!confirmed) {
+    return undefined;
+  }
+
+  const commandOptions = await askKillOptions(dependencies);
+  return createStackBrowserExecutionRequest(project, 'kill', [], options, commandOptions);
+}
+
+async function createServiceKillActionRequest(
+  project: DiscoveredComposeProject,
+  service: string,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const confirmed = await confirmDangerAction(project, dependencies, `docker compose kill ${service}`);
+
+  if (!confirmed) {
+    return undefined;
+  }
+
+  const commandOptions = await askKillOptions(dependencies);
+  return createStackBrowserExecutionRequest(project, 'kill', [service], options, commandOptions);
+}
+
+async function createStackRemoveActionRequest(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const confirmed = await confirmDangerAction(project, dependencies, 'docker compose rm');
+
+  if (!confirmed) {
+    return undefined;
+  }
+
+  return createStackBrowserExecutionRequest(project, 'rm', [], options, await askRemoveOptions(dependencies));
+}
+
+async function createServiceRemoveActionRequest(
+  project: DiscoveredComposeProject,
+  service: string,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const confirmed = await confirmDangerAction(project, dependencies, `docker compose rm ${service}`);
+
+  if (!confirmed) {
+    return undefined;
+  }
+
+  return createStackBrowserExecutionRequest(project, 'rm', [service], options, await askRemoveOptions(dependencies));
+}
+
+async function createStackPortActionRequest(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const service = await resolveServiceForStackTool(project, dependencies, 'Select the service whose port should be inspected.');
+
+  if (service === undefined) {
+    return undefined;
+  }
+
+  return createServicePortActionRequest(project, service, options, dependencies);
+}
+
+async function createServicePortActionRequest(
+  project: DiscoveredComposeProject,
+  service: string,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const privatePort = await dependencies.prompts.input({ message: `Private container port for ${service}:` });
+  const trimmedPrivatePort = privatePort.trim();
+
+  if (trimmedPrivatePort.length === 0) {
+    warn(dependencies, 'A private port is required for docker compose port.');
+    return undefined;
+  }
+
+  return createStackBrowserExecutionRequest(project, 'port', [service], options, {}, [trimmedPrivatePort]);
+}
+
+async function createCopyActionRequest(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<ComposeExecutionRequest | undefined> {
+  const source = (await dependencies.prompts.input({ message: 'Copy source path, for example api:/tmp/file.log or ./file.txt:' })).trim();
+
+  if (source.length === 0) {
+    warn(dependencies, 'A source path is required for docker compose cp.');
+    return undefined;
+  }
+
+  const target = (await dependencies.prompts.input({ message: 'Copy target path:' })).trim();
+
+  if (target.length === 0) {
+    warn(dependencies, 'A target path is required for docker compose cp.');
+    return undefined;
+  }
+
+  return createStackBrowserExecutionRequest(project, 'cp', [], options, {}, [source, target]);
+}
+
+async function resolveServiceForStackTool(
+  project: DiscoveredComposeProject,
+  dependencies: StackBrowserDependencies,
+  message: string,
+): Promise<string | undefined> {
+  if (project.services.length === 0) {
+    warn(dependencies, 'No services detected in this stack.');
+    return undefined;
+  }
+
+  if (project.services.length === 1) {
+    return project.services[0];
+  }
+
+  return dependencies.prompts.select({
+    message,
+    choices: project.services.map((service) => ({ name: service, value: service })),
+  });
+}
+
+async function askKillOptions(dependencies: StackBrowserDependencies): Promise<ComposeCommandOptions> {
+  const signal = (await dependencies.prompts.input({ message: 'Signal to send? Leave empty for Docker default.' })).trim();
+  return signal.length === 0 ? {} : { signal };
+}
+
+async function askRemoveOptions(dependencies: StackBrowserDependencies): Promise<ComposeCommandOptions> {
+  const force = await dependencies.prompts.confirm({
+    message: 'Remove without Docker confirmation? (--force)',
+    defaultValue: true,
+  });
+  const stop = await dependencies.prompts.confirm({
+    message: 'Stop containers before removing? (--stop)',
+    defaultValue: false,
+  });
+  const volumes = await dependencies.prompts.confirm({
+    message: 'Remove anonymous volumes? (--volumes)',
+    defaultValue: false,
+  });
+
+  return { force, stop, volumes };
+}
+
+async function confirmDangerAction(
+  project: DiscoveredComposeProject,
+  dependencies: StackBrowserDependencies,
+  actionLabel: string,
+): Promise<boolean> {
+  const confirmed = await dependencies.prompts.confirm({
+    message: `Confirmer ${actionLabel} sur ${project.name} ?`,
+    defaultValue: false,
+  });
+
+  if (!confirmed) {
+    print(dependencies, 'Action annulée.');
+  }
+
+  return confirmed;
 }
 
 async function executeBrowserRequest(
@@ -547,7 +813,7 @@ function createBaseComposeOptions(options: StackBrowserOptions): ComposeCommandO
 
 function createMenuChoice(icon: string, label: string, hint: string, value: string): PromptChoice {
   return {
-    name: `${icon} ${label.padEnd(18)} ${hint}`,
+    name: `${icon} ${label.padEnd(24)} ${hint}`,
     value,
   };
 }
@@ -657,6 +923,7 @@ function printStackMenu(
     `Runtime: ${runtimeStatus === undefined ? 'unknown' : runtimeStatus.summary}`,
     ...(runtimeStatus?.warning === undefined ? [] : [`Runtime warning: ${runtimeStatus.warning}`]),
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
+    'Actions: Inspect · Lifecycle · Tools · Danger',
   ]);
 }
 
@@ -684,6 +951,7 @@ function printServiceMenu(
     `File: ${project.relativePath}`,
     `Runtime: ${formatServiceRuntimeSummary(runtimeStatus)}`,
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
+    'Actions: Inspect · Lifecycle · Tools · Danger',
   ]);
 }
 

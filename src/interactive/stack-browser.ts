@@ -50,7 +50,7 @@ export type StackBrowserDependencies = {
 };
 
 type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh';
-type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell' | 'refresh';
+type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell';
 
 const stackActionChoices: PromptChoice[] = [
   createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),

@@ -28,6 +28,8 @@ Coverage excludes CLI wiring and source files that only export TypeScript types.
 
 Interactive stack browser workflows are covered with unit tests that inject fake prompt adapters, fake scan results, fake runtime status readers and fake Compose executors. This keeps menu logic testable without running Docker or requiring a terminal session.
 
+Workspace store behaviour is covered with pure unit tests and temporary JSON config paths. CLI command wiring remains thin and is validated indirectly through the underlying workspace functions.
+
 ## Test categories
 
 ### Unit tests
@@ -48,10 +50,15 @@ Targets:
 - Interactive stack browser stack choices.
 - Interactive stack browser request generation.
 - Interactive stack and service action flows with fake prompts and fake execution.
+- Browser favorite sorting and favorite toggle callbacks.
 - Runtime status command generation for `docker compose ps --format json`.
 - Runtime status parsing for JSON array and newline-delimited JSON output.
 - Runtime status fallback when Docker is unavailable.
 - Runtime status dry-run behaviour that avoids Docker calls.
+- Workspace add/remove/use/current behaviour.
+- Workspace-scoped favorite add/remove/list behaviour.
+- Recent stack de-duplication.
+- Workspace config JSON load/save.
 - Project creation and persistence.
 - Filesystem utilities.
 - Path resolution.
@@ -68,6 +75,7 @@ Targets:
 - Guided dry-run command resolution without running Docker.
 - Interactive browser dry-run command generation.
 - Browser live-status rendering with fake runtime status readers.
+- Browse without root using a configured current workspace.
 
 ### Optional Docker tests
 

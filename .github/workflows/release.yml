@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -62,3 +62,41 @@ jobs:
       - name: Publish to npm
         if: github.event_name == 'workflow_dispatch' && inputs.publish == 'true'
         run: npm publish --access public
+
+      - name: Verify published npm package
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_name="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).name")"
+          expected_version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")"
+
+          echo "Waiting for ${package_name}@${expected_version} to be available on npm..."
+          for attempt in {1..12}; do
+            published_version="$(npm view "${package_name}@${expected_version}" version --silent || true)"
+            if [ "${published_version}" = "${expected_version}" ]; then
+              echo "Published version found: ${published_version}"
+              break
+            fi
+
+            echo "Attempt ${attempt}/12: expected ${expected_version}, got '${published_version:-not found}'. Waiting..."
+            sleep 10
+          done
+
+          published_version="$(npm view "${package_name}@${expected_version}" version --silent)"
+          test "${published_version}" = "${expected_version}"
+
+          npm_global_prefix="${RUNNER_TEMP}/npm-global"
+          mkdir -p "${npm_global_prefix}"
+          npm config set prefix "${npm_global_prefix}"
+          export PATH="${npm_global_prefix}/bin:${PATH}"
+
+          npm install --global "${package_name}@${expected_version}"
+          command -v compose
+
+          installed_version="$(compose --version)"
+          echo "compose --version returned ${installed_version}"
+          test "${installed_version}" = "${expected_version}"
+
+          compose doctor --skip-docker

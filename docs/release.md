@@ -151,7 +151,18 @@ The workflow runs:
 npm publish --access public
 ```
 
-Then verify the public package:
+After publishing, the workflow performs a post-release validation against the public npm registry. It waits for the exact package version to be available, installs that version globally into an isolated npm prefix, and verifies:
+
+```bash
+npm view @jc90100/compose@<version> version
+npm install --global @jc90100/compose@<version>
+compose --version
+compose doctor --skip-docker
+```
+
+Use the explicit published version rather than `latest` for this automated verification so registry tag propagation does not create a false negative.
+
+Then verify the public package manually if needed:
 
 ```bash
 npm view @jc90100/compose version

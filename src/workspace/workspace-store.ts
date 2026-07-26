@@ -269,8 +269,13 @@ function isSameFavorite(entry: Pick<FavoriteStack, 'workspaceName' | 'relativePa
   return entry.workspaceName === workspaceName && entry.relativePath === relativePath;
 }
 
-function matchesFavoriteKey(entry: Pick<FavoriteStack, 'workspaceName' | 'relativePath' | 'stackName'>, workspaceName: string, stackKey: string): boolean {
-  return entry.workspaceName === workspaceName && (entry.relativePath === stackKey || entry.stackName === stackKey || entry.composeFilePath === stackKey);
+function matchesFavoriteKey(
+  entry: Pick<FavoriteStack, 'workspaceName' | 'relativePath' | 'stackName' | 'composeFilePath'>,
+  workspaceName: string,
+  stackKey: string,
+): boolean {
+  return entry.workspaceName === workspaceName
+    && (entry.relativePath === stackKey || entry.stackName === stackKey || entry.composeFilePath === stackKey);
 }
 
 function compareFavoriteStacks(left: FavoriteStack, right: FavoriteStack): number {

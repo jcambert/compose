@@ -26,7 +26,7 @@ Coverage includes executable core modules:
 
 Coverage excludes CLI wiring and source files that only export TypeScript types. Those files do not contain executable behaviour and should not make the coverage report artificially fail.
 
-Interactive stack browser workflows are covered with unit tests that inject fake prompt adapters, fake scan results and fake Compose executors. This keeps menu logic testable without running Docker or requiring a terminal session.
+Interactive stack browser workflows are covered with unit tests that inject fake prompt adapters, fake scan results, fake runtime status readers and fake Compose executors. This keeps menu logic testable without running Docker or requiring a terminal session.
 
 ## Test categories
 
@@ -48,6 +48,10 @@ Targets:
 - Interactive stack browser stack choices.
 - Interactive stack browser request generation.
 - Interactive stack and service action flows with fake prompts and fake execution.
+- Runtime status command generation for `docker compose ps --format json`.
+- Runtime status parsing for JSON array and newline-delimited JSON output.
+- Runtime status fallback when Docker is unavailable.
+- Runtime status dry-run behaviour that avoids Docker calls.
 - Project creation and persistence.
 - Filesystem utilities.
 - Path resolution.
@@ -63,6 +67,7 @@ Targets:
 - Dry-run Compose execution.
 - Guided dry-run command resolution without running Docker.
 - Interactive browser dry-run command generation.
+- Browser live-status rendering with fake runtime status readers.
 
 ### Optional Docker tests
 
@@ -73,6 +78,8 @@ Recommended flag:
 ```bash
 COMPOSE_E2E_DOCKER=1 npm test
 ```
+
+Future Docker-backed browser tests should validate live `docker compose ps --format json` integration on a small fixture stack.
 
 ## Coverage discipline
 

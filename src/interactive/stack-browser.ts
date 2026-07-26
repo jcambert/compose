@@ -8,10 +8,17 @@ import type { PromptAdapter, PromptChoice } from '../guided/guided-command-resol
 import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
 import type { ScanComposeFilesOptions } from '../scanner/compose-file-scanner.js';
 import type { DiscoveredComposeProject } from '../scanner/discovered-project.js';
+import {
+  createUnavailableStackRuntimeStatus,
+  formatServiceRuntimeSummary,
+  readStackRuntimeStatus,
+} from './stack-runtime-status.js';
+import type { ServiceRuntimeStatus, StackRuntimeStatus } from './stack-runtime-status.js';
 
 export const stackBrowserValues = {
   back: '__back__',
   quit: '__quit__',
+  refresh: '__refresh__',
 } as const;
 
 export type StackBrowserOptions = {
@@ -28,24 +35,31 @@ export type StackBrowserResult = {
   lastExitCode?: number;
 };
 
+export type StackRuntimeStatusReader = (
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+) => Promise<StackRuntimeStatus>;
+
 export type StackBrowserDependencies = {
   prompts: PromptAdapter;
   scan?: (root: string, options: ScanComposeFilesOptions) => Promise<DiscoveredComposeProject[]>;
   execute?: (request: ComposeExecutionRequest) => Promise<ComposeExecutionResult>;
+  readRuntimeStatus?: StackRuntimeStatusReader;
   print?: (message: string) => void;
   warn?: (message: string) => void;
 };
 
-type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services';
-type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell';
+type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh';
+type ServiceAction = 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'shell' | 'refresh';
 
 const stackActionChoices: PromptChoice[] = [
   createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),
+  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),
   createMenuChoice('●', 'Status', 'docker compose ps', 'ps'),
   createMenuChoice('▶', 'Start', 'docker compose up -d', 'up'),
   createMenuChoice('◆', 'Build', 'docker compose build', 'build'),
   createMenuChoice('■', 'Stop', 'docker compose stop', 'stop'),
-  createMenuChoice('↻', 'Restart', 'docker compose restart', 'restart'),
+  createMenuChoice('↺', 'Restart', 'docker compose restart', 'restart'),
   createMenuChoice('◷', 'Logs', 'docker compose logs --tail 100', 'logs'),
   createMenuChoice('⚠', 'Down', 'arrêter et retirer les conteneurs', 'down'),
   createMenuChoice('←', 'Back', 'retour à la liste des stacks', stackBrowserValues.back),
@@ -53,10 +67,11 @@ const stackActionChoices: PromptChoice[] = [
 ];
 
 const serviceActionChoices: PromptChoice[] = [
+  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),
   createMenuChoice('▶', 'Start service', 'docker compose up -d <service>', 'up'),
   createMenuChoice('◆', 'Build service', 'docker compose build <service>', 'build'),
   createMenuChoice('■', 'Stop service', 'docker compose stop <service>', 'stop'),
-  createMenuChoice('↻', 'Restart service', 'docker compose restart <service>', 'restart'),
+  createMenuChoice('↺', 'Restart service', 'docker compose restart <service>', 'restart'),
   createMenuChoice('◷', 'Logs service', 'docker compose logs --tail 100 <service>', 'logs'),
   createMenuChoice('▣', 'Shell', 'docker compose exec <service> sh', 'shell'),
   createMenuChoice('←', 'Back', 'retour aux services', stackBrowserValues.back),
@@ -85,18 +100,29 @@ export async function browseComposeStacks(
 
   printWarnings(projects, dependencies);
 
+  let runtimeStatuses = await readRuntimeStatuses(projects, options, dependencies);
   let browsingStacks = true;
 
   while (browsingStacks) {
-    printHomeMenu(root, projects, options, dependencies);
+    printHomeMenu(root, projects, options, runtimeStatuses, dependencies);
 
     const projectId = await dependencies.prompts.select({
       message: 'Select a stack',
-      choices: [...createStackChoices(projects), createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit)],
+      choices: [
+        ...createStackChoices(projects, runtimeStatuses),
+        createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', stackBrowserValues.refresh),
+        createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
+      ],
     });
 
     if (projectId === stackBrowserValues.quit) {
       browsingStacks = false;
+      continue;
+    }
+
+    if (projectId === stackBrowserValues.refresh) {
+      runtimeStatuses = await readRuntimeStatuses(projects, options, dependencies);
+      print(dependencies, 'Runtime status refreshed.');
       continue;
     }
 
@@ -107,7 +133,7 @@ export async function browseComposeStacks(
       continue;
     }
 
-    const stackResult = await browseStack(project, options, dependencies);
+    const stackResult = await browseStack(project, options, runtimeStatuses, dependencies);
     result.executedActions += stackResult.executedActions;
     result.failedActions += stackResult.failedActions;
 
@@ -123,9 +149,12 @@ export async function browseComposeStacks(
   return normalizeQuitExitCode(result);
 }
 
-export function createStackChoices(projects: DiscoveredComposeProject[]): PromptChoice[] {
+export function createStackChoices(
+  projects: DiscoveredComposeProject[],
+  runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus> = new Map<string, StackRuntimeStatus>(),
+): PromptChoice[] {
   return projects.map((project, index) => ({
-    name: formatProjectChoice(project, index + 1),
+    name: formatProjectChoice(project, index + 1, runtimeStatuses.get(project.id)),
     value: project.id,
   }));
 }
@@ -154,6 +183,7 @@ export function createStackBrowserExecutionRequest(
 async function browseStack(
   project: DiscoveredComposeProject,
   options: StackBrowserOptions,
+  runtimeStatuses: Map<string, StackRuntimeStatus>,
   dependencies: StackBrowserDependencies,
 ): Promise<StackBrowserResult> {
   const result: StackBrowserResult = {
@@ -163,7 +193,7 @@ async function browseStack(
   let browsingStack = true;
 
   while (browsingStack) {
-    printStackMenu(project, options, dependencies);
+    printStackMenu(project, options, runtimeStatuses.get(project.id), dependencies);
 
     const action = await dependencies.prompts.select({
       message: 'Choose an action',
@@ -180,8 +210,14 @@ async function browseStack(
       continue;
     }
 
+    if (action === stackBrowserValues.refresh) {
+      await refreshProjectRuntimeStatus(project, options, runtimeStatuses, dependencies);
+      print(dependencies, 'Runtime status refreshed.');
+      continue;
+    }
+
     if (action === 'services') {
-      const serviceResult = await browseServices(project, options, dependencies);
+      const serviceResult = await browseServices(project, options, runtimeStatuses, dependencies);
       result.executedActions += serviceResult.executedActions;
       result.failedActions += serviceResult.failedActions;
 
@@ -203,6 +239,7 @@ async function browseStack(
     }
 
     await executeBrowserRequest(request, result, dependencies);
+    await refreshProjectRuntimeStatusAfterExecution(project, options, runtimeStatuses, dependencies, request.options.dryRun === true);
   }
 
   return result;
@@ -211,6 +248,7 @@ async function browseStack(
 async function browseServices(
   project: DiscoveredComposeProject,
   options: StackBrowserOptions,
+  runtimeStatuses: Map<string, StackRuntimeStatus>,
   dependencies: StackBrowserDependencies,
 ): Promise<StackBrowserResult> {
   const result: StackBrowserResult = {
@@ -229,12 +267,14 @@ async function browseServices(
   let browsingServices = true;
 
   while (browsingServices) {
-    printServicesMenu(project, dependencies);
+    const runtimeStatus = runtimeStatuses.get(project.id);
+    printServicesMenu(project, runtimeStatus, dependencies);
 
     const service = await dependencies.prompts.select({
       message: 'Select a service',
       choices: [
-        ...project.services.map((serviceName, index) => createServiceChoice(serviceName, index + 1)),
+        ...project.services.map((serviceName, index) => createServiceChoice(serviceName, index + 1, runtimeStatus?.services[serviceName])),
+        createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', stackBrowserValues.refresh),
         createMenuChoice('←', 'Back', 'retour à la stack', stackBrowserValues.back),
         createMenuChoice('✕', 'Quit', 'fermer le browser', stackBrowserValues.quit),
       ],
@@ -250,7 +290,13 @@ async function browseServices(
       continue;
     }
 
-    const serviceResult = await browseService(project, service, options, dependencies);
+    if (service === stackBrowserValues.refresh) {
+      await refreshProjectRuntimeStatus(project, options, runtimeStatuses, dependencies);
+      print(dependencies, 'Runtime status refreshed.');
+      continue;
+    }
+
+    const serviceResult = await browseService(project, service, options, runtimeStatuses, dependencies);
     result.executedActions += serviceResult.executedActions;
     result.failedActions += serviceResult.failedActions;
 
@@ -270,6 +316,7 @@ async function browseService(
   project: DiscoveredComposeProject,
   service: string,
   options: StackBrowserOptions,
+  runtimeStatuses: Map<string, StackRuntimeStatus>,
   dependencies: StackBrowserDependencies,
 ): Promise<StackBrowserResult> {
   const result: StackBrowserResult = {
@@ -279,7 +326,7 @@ async function browseService(
   let browsingService = true;
 
   while (browsingService) {
-    printServiceMenu(project, service, options, dependencies);
+    printServiceMenu(project, service, options, runtimeStatuses.get(project.id)?.services[service], dependencies);
 
     const action = await dependencies.prompts.select({
       message: 'Choose a service action',
@@ -296,8 +343,15 @@ async function browseService(
       continue;
     }
 
+    if (action === stackBrowserValues.refresh) {
+      await refreshProjectRuntimeStatus(project, options, runtimeStatuses, dependencies);
+      print(dependencies, 'Runtime status refreshed.');
+      continue;
+    }
+
     const request = createServiceActionRequest(project, service, action as ServiceAction, options);
     await executeBrowserRequest(request, result, dependencies);
+    await refreshProjectRuntimeStatusAfterExecution(project, options, runtimeStatuses, dependencies, request.options.dryRun === true);
   }
 
   return result;
@@ -309,7 +363,7 @@ async function createStackActionRequest(
   options: StackBrowserOptions,
   dependencies: StackBrowserDependencies,
 ): Promise<ComposeExecutionRequest | undefined> {
-  if (action === 'services') {
+  if (action === 'services' || action === 'refresh') {
     return undefined;
   }
 
@@ -325,7 +379,7 @@ async function createStackActionRequest(
     }
   }
 
-  const commandByAction: Record<Exclude<StackAction, 'services'>, ComposeExecutionRequest> = {
+  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh'>, ComposeExecutionRequest> = {
     ps: createStackBrowserExecutionRequest(project, 'ps', [], options),
     up: createStackBrowserExecutionRequest(project, 'up', [], options, { detach: true }),
     build: createStackBrowserExecutionRequest(project, 'build', [], options),
@@ -344,7 +398,7 @@ function createServiceActionRequest(
   action: ServiceAction,
   options: StackBrowserOptions,
 ): ComposeExecutionRequest {
-  const commandByAction: Record<ServiceAction, ComposeExecutionRequest> = {
+  const commandByAction: Record<Exclude<ServiceAction, 'refresh'>, ComposeExecutionRequest> = {
     up: createStackBrowserExecutionRequest(project, 'up', [service], options, { detach: true }),
     build: createStackBrowserExecutionRequest(project, 'build', [service], options),
     stop: createStackBrowserExecutionRequest(project, 'stop', [service], options),
@@ -382,6 +436,58 @@ async function executeBrowserRequest(
   print(dependencies, `Done: ${executionResult.command}`);
 }
 
+async function readRuntimeStatuses(
+  projects: DiscoveredComposeProject[],
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<Map<string, StackRuntimeStatus>> {
+  const runtimeStatuses = new Map<string, StackRuntimeStatus>();
+
+  for (const project of projects) {
+    runtimeStatuses.set(project.id, await readRuntimeStatus(project, options, dependencies));
+  }
+
+  return runtimeStatuses;
+}
+
+async function refreshProjectRuntimeStatus(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  runtimeStatuses: Map<string, StackRuntimeStatus>,
+  dependencies: StackBrowserDependencies,
+): Promise<void> {
+  runtimeStatuses.set(project.id, await readRuntimeStatus(project, options, dependencies));
+}
+
+async function refreshProjectRuntimeStatusAfterExecution(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  runtimeStatuses: Map<string, StackRuntimeStatus>,
+  dependencies: StackBrowserDependencies,
+  skippedBecauseDryRun: boolean,
+): Promise<void> {
+  if (skippedBecauseDryRun) {
+    return;
+  }
+
+  await refreshProjectRuntimeStatus(project, options, runtimeStatuses, dependencies);
+}
+
+async function readRuntimeStatus(
+  project: DiscoveredComposeProject,
+  options: StackBrowserOptions,
+  dependencies: StackBrowserDependencies,
+): Promise<StackRuntimeStatus> {
+  const reader = dependencies.readRuntimeStatus ?? readStackRuntimeStatus;
+
+  try {
+    return await reader(project, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Docker runtime status is unavailable.';
+    return createUnavailableStackRuntimeStatus(project, message);
+  }
+}
+
 function createScanOptions(options: StackBrowserOptions): ScanComposeFilesOptions {
   return options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth };
 }
@@ -402,15 +508,14 @@ function createMenuChoice(icon: string, label: string, hint: string, value: stri
   };
 }
 
-function createServiceChoice(serviceName: string, index: number): PromptChoice {
-  return createMenuChoice('▣', `${index}. ${serviceName}`, 'service', serviceName);
+function createServiceChoice(serviceName: string, index: number, runtimeStatus: ServiceRuntimeStatus | undefined): PromptChoice {
+  return createMenuChoice(formatServiceStateIcon(runtimeStatus), `${index}. ${serviceName}`, formatServiceRuntimeSummary(runtimeStatus), serviceName);
 }
 
-function formatProjectChoice(project: DiscoveredComposeProject, index: number): string {
-  const status = project.warnings.length === 0 ? 'ready' : `${project.warnings.length} warning(s)`;
-  const detail = `${formatServiceCount(project.services.length)} · ${status} · ${project.relativePath}`;
+function formatProjectChoice(project: DiscoveredComposeProject, index: number, runtimeStatus: StackRuntimeStatus | undefined): string {
+  const detail = `${formatServiceCount(project.services.length)} · ${formatStackRuntimeLabel(project, runtimeStatus)} · ${project.relativePath}`;
 
-  return `▣ ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;
+  return `${formatStackStateIcon(runtimeStatus)} ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;
 }
 
 function formatServiceCount(count: number): string {
@@ -425,15 +530,61 @@ function formatServiceCount(count: number): string {
   return `${count} services`;
 }
 
+function formatStackRuntimeLabel(project: DiscoveredComposeProject, runtimeStatus: StackRuntimeStatus | undefined): string {
+  if (project.warnings.length > 0) {
+    return `${project.warnings.length} warning(s)`;
+  }
+
+  if (runtimeStatus === undefined) {
+    return 'runtime unknown';
+  }
+
+  return runtimeStatus.summary;
+}
+
+function formatStackStateIcon(runtimeStatus: StackRuntimeStatus | undefined): string {
+  if (runtimeStatus === undefined) {
+    return '?';
+  }
+
+  const icons: Record<StackRuntimeStatus['state'], string> = {
+    running: '●',
+    partial: '◐',
+    stopped: '○',
+    unavailable: '◇',
+    unknown: '?',
+  };
+
+  return icons[runtimeStatus.state];
+}
+
+function formatServiceStateIcon(runtimeStatus: ServiceRuntimeStatus | undefined): string {
+  if (runtimeStatus === undefined) {
+    return '?';
+  }
+
+  const icons: Record<ServiceRuntimeStatus['state'], string> = {
+    running: '●',
+    stopped: '○',
+    exited: '○',
+    unhealthy: '!',
+    unknown: '?',
+  };
+
+  return icons[runtimeStatus.state];
+}
+
 function printHomeMenu(
   root: string,
   projects: DiscoveredComposeProject[],
   options: StackBrowserOptions,
+  runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus>,
   dependencies: StackBrowserDependencies,
 ): void {
   printMenuPanel(dependencies, 'Compose Browser', [
     `Root: ${root}`,
     `Stacks: ${projects.length}`,
+    `Runtime: ${formatRuntimeOverview(projects, runtimeStatuses)}`,
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
     'Navigate with arrows, press Enter to select.',
   ]);
@@ -442,19 +593,27 @@ function printHomeMenu(
 function printStackMenu(
   project: DiscoveredComposeProject,
   options: StackBrowserOptions,
+  runtimeStatus: StackRuntimeStatus | undefined,
   dependencies: StackBrowserDependencies,
 ): void {
   printMenuPanel(dependencies, `Stack: ${project.name}`, [
     `File: ${project.relativePath}`,
     `Services: ${project.services.length === 0 ? 'none detected' : project.services.join(', ')}`,
+    `Runtime: ${runtimeStatus === undefined ? 'unknown' : runtimeStatus.summary}`,
+    ...(runtimeStatus?.warning === undefined ? [] : [`Runtime warning: ${runtimeStatus.warning}`]),
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
   ]);
 }
 
-function printServicesMenu(project: DiscoveredComposeProject, dependencies: StackBrowserDependencies): void {
+function printServicesMenu(
+  project: DiscoveredComposeProject,
+  runtimeStatus: StackRuntimeStatus | undefined,
+  dependencies: StackBrowserDependencies,
+): void {
   printMenuPanel(dependencies, `Services: ${project.name}`, [
     `File: ${project.relativePath}`,
-    `Available services: ${project.services.length}`,
+    `Runtime: ${runtimeStatus === undefined ? 'unknown' : runtimeStatus.summary}`,
+    ...formatServiceRuntimeLines(project, runtimeStatus),
   ]);
 }
 
@@ -462,13 +621,47 @@ function printServiceMenu(
   project: DiscoveredComposeProject,
   service: string,
   options: StackBrowserOptions,
+  runtimeStatus: ServiceRuntimeStatus | undefined,
   dependencies: StackBrowserDependencies,
 ): void {
   printMenuPanel(dependencies, `Service: ${service}`, [
     `Stack: ${project.name}`,
     `File: ${project.relativePath}`,
+    `Runtime: ${formatServiceRuntimeSummary(runtimeStatus)}`,
     `Mode: ${options.dryRun === true ? 'dry-run preview' : 'execute commands'}`,
   ]);
+}
+
+function formatServiceRuntimeLines(
+  project: DiscoveredComposeProject,
+  runtimeStatus: StackRuntimeStatus | undefined,
+): string[] {
+  if (project.services.length === 0) {
+    return ['Available services: none'];
+  }
+
+  return project.services.map((serviceName) => {
+    const serviceStatus = runtimeStatus?.services[serviceName];
+    return `${formatServiceStateIcon(serviceStatus)} ${serviceName.padEnd(18)} ${formatServiceRuntimeSummary(serviceStatus)}`;
+  });
+}
+
+function formatRuntimeOverview(
+  projects: DiscoveredComposeProject[],
+  runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus>,
+): string {
+  const statuses = projects.map((project) => runtimeStatuses.get(project.id)).filter((status): status is StackRuntimeStatus => status !== undefined);
+
+  if (statuses.length === 0) {
+    return 'unknown';
+  }
+
+  const runningStacks = statuses.filter((status) => status.state === 'running').length;
+  const partialStacks = statuses.filter((status) => status.state === 'partial').length;
+  const stoppedStacks = statuses.filter((status) => status.state === 'stopped').length;
+  const unavailableStacks = statuses.filter((status) => status.state === 'unavailable').length;
+
+  return `${runningStacks} running · ${partialStacks} partial · ${stoppedStacks} stopped · ${unavailableStacks} unavailable`;
 }
 
 function printWarnings(projects: DiscoveredComposeProject[], dependencies: StackBrowserDependencies): void {

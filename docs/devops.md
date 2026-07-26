@@ -25,14 +25,19 @@ chore/release-workflow
 Every push and pull request runs:
 
 1. dependency installation
-2. lint
-3. typecheck
-4. tests with coverage
-5. build
+2. security audit
+3. lint
+4. typecheck
+5. tests with coverage
+6. build
 
 The CI workflow currently uses `npm install` because the first repository bootstrap does not yet contain a committed `package-lock.json`. Once the lock file is generated and committed, the workflow must be hardened back to `npm ci` with npm cache enabled.
 
 The workflows use the current Node 24-compatible `actions/setup-node@v6` action while testing the package against Node.js 20 and Node.js 22.
+
+The package requires Node.js `>=20.19.0`, which aligns with the current ESLint 10 runtime requirement. The CI matrix keeps testing against Node.js 20 and Node.js 22, but those aliases resolve to compatible latest patch versions on GitHub-hosted runners.
+
+Security audit is part of the validation pipeline through `npm audit --audit-level=moderate`. Audit fixes must be reviewed explicitly when they require major upgrades; avoid applying `npm audit fix --force` blindly.
 
 Linting uses `tsconfig.eslint.json`, a dedicated TypeScript project that includes both `src` and `tests`. The production build keeps using `tsconfig.json`, which only compiles the CLI sources into `dist`.
 
@@ -79,4 +84,5 @@ v1.0.0  stable command contract
 - Add dry-run support for safety.
 - Validate YAML before writing.
 - Review npm dependencies before release.
+- Keep `npm audit --audit-level=moderate` green in CI.
 - Prefer least-privilege GitHub tokens.

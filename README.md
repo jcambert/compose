@@ -12,6 +12,7 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - Select a project interactively.
 - Browse discovered stacks and services interactively.
 - Display live stack and service runtime status in the browser.
+- Persist named workspaces, favorites and recent stacks for daily usage.
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Create and maintain Compose project files with typed YAML validation.
@@ -21,6 +22,14 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 ## Command examples
 
 ```bash
+compose workspace add dev C:\Sources
+compose workspace use dev
+compose workspace current
+compose workspace list
+compose browse
+compose favorites add infra
+compose favorites list
+
 compose scan .
 compose scan C:\Sources --json
 compose select .
@@ -50,11 +59,54 @@ compose project remove-service api --project ./my-stack
 compose project validate --project ./my-stack
 ```
 
+## Workspaces and favorites
+
+Use workspaces when you browse the same root directory often.
+
+```bash
+compose workspace add dev C:\Sources
+compose workspace use dev
+compose browse
+```
+
+When `compose browse` is called without a root argument, it uses the current workspace root. If no workspace is configured, it falls back to the current directory.
+
+Workspace commands:
+
+```bash
+compose workspace add <name> <path>
+compose workspace remove <name>
+compose workspace use <name>
+compose workspace list
+compose workspace current
+```
+
+Favorite commands:
+
+```bash
+compose favorites add infra
+compose favorites remove infra
+compose favorites list
+```
+
+Favorites are scoped to the current workspace and are stored in the local user config file:
+
+- Windows: `%APPDATA%\compose\config.json`
+- Linux/macOS: `~/.config/compose/config.json`
+
+In the browser, favorites are displayed first and marked with a star:
+
+```text
+★ 1. infra           4 services · 3 running · 1 stopped · infra/compose.yaml
+◐ 2. monitoring      2 services · 1 running · 1 stopped · monitoring/compose.yml
+```
+
 ## Interactive stack browser
 
 Use `compose browse` when you want to scan a root directory and navigate stacks and services from menus instead of typing each command.
 
 ```bash
+compose browse
 compose browse .
 compose browse C:\Sources --max-depth 8
 compose stacks . --dry-run
@@ -64,14 +116,15 @@ The browser is menu-first and designed for day-to-day terminal usage. It reads l
 
 ```text
 ╭─ Compose Browser ──────────────────────────────────────────────
-│ Root: .
+│ Root: C:\Sources
+│ Workspace: dev
 │ Stacks: 3
 │ Runtime: 1 running · 1 partial · 1 stopped · 0 unavailable
 │ Mode: execute commands
 │ Navigate with arrows, press Enter to select.
 ╰──────────────────────────────────────────────────────────────────
 ? Select a stack
-  ● 1. infra           4 services · 4 running · 0 stopped · infra/compose.yaml
+  ★ 1. infra           4 services · 4 running · 0 stopped · infra/compose.yaml
   ◐ 2. monitoring      2 services · 1 running · 1 stopped · monitoring/compose.yml
   ↻ Refresh            rafraîchir les statuts runtime
   ✕ Quit               fermer le browser
@@ -93,6 +146,7 @@ The stack and service menus use short action labels with command previews:
 
 ```text
 ▦ Services          explorer les services de cette stack
+★ Favorite          ajouter ou retirer des favoris
 ↻ Refresh           rafraîchir les statuts runtime
 ● Status            docker compose ps
 ▶ Start             docker compose up -d
@@ -106,6 +160,7 @@ The stack and service menus use short action labels with command previews:
 The browser lets you:
 
 - select a discovered stack from the scan result
+- keep favorite stacks at the top of the list
 - see running, stopped, unhealthy and unavailable runtime states
 - refresh runtime status without leaving the menu
 - inspect containers with `ps`
@@ -166,6 +221,7 @@ src/
   scanner/      recursive Compose file discovery
   compose/      Docker Compose command building and execution
   project/      project creation and service mutation
+  workspace/    local workspaces, favorites and recent stack persistence
   yaml/         YAML parsing, validation and writing
   utils/        common filesystem, path, error and logging helpers
 docs/
@@ -206,7 +262,8 @@ For local CLI testing:
 ```bash
 npm link
 compose --help
-compose browse . --dry-run
+compose workspace add dev C:\Sources
+compose browse --dry-run
 ```
 
 ## Delivery discipline

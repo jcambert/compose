@@ -121,6 +121,9 @@ function registerComposeExecutionCommands(program: Command): void {
 
   addComposeCommand(program, 'ps')
     .argument('[services...]')
+    .option('--all', 'show all containers')
+    .option('--quiet', 'only display IDs')
+    .option('--format <format>', 'format output')
     .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('ps', services, options));
 
   addComposeCommand(program, 'logs')
@@ -141,7 +144,94 @@ function registerComposeExecutionCommands(program: Command): void {
 
   addComposeCommand(program, 'restart')
     .argument('[services...]')
+    .option('-t, --timeout <seconds>', 'shutdown timeout in seconds')
     .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('restart', services, options));
+
+  addComposeCommand(program, 'start')
+    .argument('[services...]')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('start', services, options));
+
+  addComposeCommand(program, 'stop')
+    .argument('[services...]')
+    .option('-t, --timeout <seconds>', 'shutdown timeout in seconds')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('stop', services, options));
+
+  addComposeCommand(program, 'create')
+    .argument('[services...]')
+    .option('--build', 'build images before creating containers')
+    .option('--no-build', 'do not build images before creating containers')
+    .option('--remove-orphans', 'remove containers for services not defined in the Compose file')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('create', services, options));
+
+  addComposeCommand(program, 'pause')
+    .argument('[services...]')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('pause', services, options));
+
+  addComposeCommand(program, 'unpause')
+    .argument('[services...]')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('unpause', services, options));
+
+  addComposeCommand(program, 'kill')
+    .argument('[services...]')
+    .option('-s, --signal <signal>', 'signal to send to containers')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('kill', services, options));
+
+  addComposeCommand(program, 'rm')
+    .argument('[services...]')
+    .option('-f, --force', 'do not ask for confirmation')
+    .option('-s, --stop', 'stop containers before removing')
+    .option('-v, --volumes', 'remove anonymous volumes attached to containers')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('rm', services, options));
+
+  addComposeCommand(program, 'config')
+    .option('--quiet', 'only validate the configuration')
+    .option('--no-interpolate', 'do not interpolate environment variables')
+    .option('--services', 'print service names')
+    .option('--volumes', 'print volume names')
+    .option('--profiles', 'print profile names')
+    .option('--format <format>', 'output format')
+    .action(async (options: ComposeCliOptions & { services?: boolean; profiles?: boolean }) =>
+      runSimpleComposeCommand('config', [], createConfigComposeCliOptions(options)),
+    );
+
+  addComposeCommand(program, 'cp')
+    .argument('<source>', 'source path')
+    .argument('<target>', 'target path')
+    .action(async (source: string, target: string, options: ComposeCliOptions) => runSimpleComposeCommand('cp', [], options, [source, target]));
+
+  addComposeCommand(program, 'events')
+    .argument('[services...]')
+    .option('--json', 'output events as JSON')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('events', services, options));
+
+  addComposeCommand(program, 'images')
+    .argument('[services...]')
+    .option('-q, --quiet', 'only display image IDs')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('images', services, options));
+
+  addComposeCommand(program, 'ls')
+    .option('--all', 'show stopped Compose projects')
+    .option('--quiet', 'only display IDs')
+    .option('--format <format>', 'output format')
+    .action(async (options: ComposeCliOptions) => runSimpleComposeCommand('ls', [], options));
+
+  addComposeCommand(program, 'port')
+    .argument('<service>', 'service name')
+    .argument('<private-port>', 'private container port')
+    .action(async (service: string, privatePort: string, options: ComposeCliOptions) => runSimpleComposeCommand('port', [service], options, [privatePort]));
+
+  addComposeCommand(program, 'top')
+    .argument('[services...]')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('top', services, options));
+
+  addComposeCommand(program, 'version')
+    .option('--short', 'only show the version number')
+    .action(async (options: ComposeCliOptions) => runSimpleComposeCommand('version', [], options));
+
+  addComposeCommand(program, 'watch')
+    .argument('[services...]')
+    .option('--no-up', 'do not build and start services before watching')
+    .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('watch', services, options));
 
   addComposeCommand(program, 'exec')
     .argument('[service]')
@@ -329,6 +419,15 @@ async function getAvailableServicesForGuidance(composeFilePath: string, guided: 
   }
 }
 
+function createConfigComposeCliOptions(options: ComposeCliOptions & { services?: boolean; profiles?: boolean }): ComposeCliOptions {
+  return {
+    ...options,
+    ...(options.services === undefined ? {} : { servicesOnly: options.services }),
+    ...(options.volumes === undefined ? {} : { volumesOnly: options.volumes }),
+    ...(options.profiles === undefined ? {} : { profilesOnly: options.profiles }),
+  };
+}
+
 function createScanComposeFilesOptions(maxDepth: number | undefined): ScanComposeFilesOptions {
   return maxDepth === undefined ? {} : { maxDepth };
 }
@@ -382,12 +481,29 @@ type ComposeCliOptions = {
   removeOrphans?: boolean;
   volumes?: boolean;
   build?: boolean;
+  noBuild?: boolean;
   noCache?: boolean;
   pull?: boolean;
   follow?: boolean;
   tail?: string;
   scale?: string[];
   rm?: boolean;
+  force?: boolean;
+  stop?: boolean;
+  timeout?: string;
+  signal?: string;
+  all?: boolean;
+  quiet?: boolean;
+  format?: string;
+  json?: boolean;
+  noInterpolate?: boolean;
+  servicesOnly?: boolean;
+  volumesOnly?: boolean;
+  profilesOnly?: boolean;
+  services?: boolean;
+  profiles?: boolean;
+  short?: boolean;
+  noUp?: boolean;
   env?: string[];
   user?: string;
   workdir?: string;

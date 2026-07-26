@@ -137,7 +137,7 @@ describe('buildComposeCommand', () => {
     ]);
   });
 
-  it.each<ComposeSubCommand>(['ps', 'pull', 'restart', 'stop', 'start'])('builds %s with services', (subCommand) => {
+  it.each<ComposeSubCommand>(['ps', 'pull', 'restart', 'stop', 'start', 'create', 'pause', 'unpause', 'images', 'top', 'watch'])('builds %s with services', (subCommand) => {
     const command = buildComposeCommand({
       composeFilePath,
       command: subCommand,
@@ -149,16 +149,143 @@ describe('buildComposeCommand', () => {
     expect(command.args).toEqual(['compose', '-f', composeFilePath, subCommand, 'api', 'db']);
   });
 
-  it('builds config without services or options', () => {
+  it('builds ps with all, quiet and format options', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'ps',
+      services: [],
+      passthroughArgs: [],
+      options: { all: true, quiet: true, format: 'json' },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'ps', '--all', '--quiet', '--format', 'json']);
+  });
+
+  it('builds create with build, no-build and orphan cleanup', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'create',
+      services: ['api'],
+      passthroughArgs: [],
+      options: { build: true, noBuild: true, removeOrphans: true },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'create', '--build', '--no-build', '--remove-orphans', 'api']);
+  });
+
+  it('builds kill with a signal', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'kill',
+      services: ['api'],
+      passthroughArgs: [],
+      options: { signal: 'SIGTERM' },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'kill', '--signal', 'SIGTERM', 'api']);
+  });
+
+  it('builds rm with force, stop and volume cleanup', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'rm',
+      services: ['api'],
+      passthroughArgs: [],
+      options: { force: true, stop: true, volumes: true },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'rm', '--force', '--stop', '--volumes', 'api']);
+  });
+
+  it('builds config with validation and projection options', () => {
     const command = buildComposeCommand({
       composeFilePath,
       command: 'config',
       services: [],
       passthroughArgs: [],
+      options: {
+        quiet: true,
+        noInterpolate: true,
+        servicesOnly: true,
+        volumesOnly: true,
+        profilesOnly: true,
+        format: 'json',
+      },
+    });
+
+    expect(command.args).toEqual([
+      'compose',
+      '-f',
+      composeFilePath,
+      'config',
+      '--quiet',
+      '--no-interpolate',
+      '--services',
+      '--volumes',
+      '--profiles',
+      '--format',
+      'json',
+    ]);
+  });
+
+  it('builds cp with source and target passthrough arguments', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'cp',
+      services: [],
+      passthroughArgs: ['api:/tmp/file.txt', './file.txt'],
       options: {},
     });
 
-    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'config']);
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'cp', 'api:/tmp/file.txt', './file.txt']);
+  });
+
+  it('builds events with json output and service filtering', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'events',
+      services: ['api'],
+      passthroughArgs: [],
+      options: { json: true },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'events', '--json', 'api']);
+  });
+
+  it('builds ls with all, quiet and format', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'ls',
+      services: [],
+      passthroughArgs: [],
+      options: { all: true, quiet: true, format: 'json' },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'ls', '--all', '--quiet', '--format', 'json']);
+  });
+
+  it('builds port with service and private port', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'port',
+      services: ['api'],
+      passthroughArgs: ['80'],
+      options: {},
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'port', 'api', '80']);
+  });
+
+  it('builds version with short output', () => {
+    const command = buildComposeCommand({
+      composeFilePath,
+      command: 'version',
+      services: [],
+      passthroughArgs: [],
+      options: { short: true },
+    });
+
+    expect(command.args).toEqual(['compose', '-f', composeFilePath, 'version', '--short']);
   });
 
   it('adds global compose options before the subcommand', () => {

@@ -6,6 +6,7 @@ import process from 'node:process';
 
 const projectRoot = process.cwd();
 const cliEntrypoint = join(projectRoot, 'dist', 'cli', 'index.js');
+const packageMetadata = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf-8'));
 const tempRoot = await mkdtemp(join(tmpdir(), 'compose-smoke-'));
 const smokeEnvironment = {
   ...process.env,
@@ -13,6 +14,7 @@ const smokeEnvironment = {
 };
 
 await assertCliEntrypoint();
+runSmokeCommand(['--version'], packageMetadata.version);
 runSmokeCommand(['--help']);
 runSmokeCommand(['scan', '--help']);
 runSmokeCommand(['browse', '--help']);
@@ -28,7 +30,7 @@ async function assertCliEntrypoint() {
   }
 }
 
-function runSmokeCommand(args) {
+function runSmokeCommand(args, expectedOutput) {
   const result = spawnSync(process.execPath, [cliEntrypoint, ...args], {
     cwd: projectRoot,
     env: smokeEnvironment,
@@ -42,6 +44,16 @@ function runSmokeCommand(args) {
         `Exit code: ${result.status}`,
         result.stdout,
         result.stderr,
+      ].join('\n'),
+    );
+  }
+
+  if (expectedOutput !== undefined && result.stdout.trim() !== expectedOutput) {
+    throw new Error(
+      [
+        `Smoke command returned unexpected output: compose ${args.join(' ')}`,
+        `Expected: ${expectedOutput}`,
+        `Actual: ${result.stdout.trim()}`,
       ].join('\n'),
     );
   }

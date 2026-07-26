@@ -140,3 +140,31 @@ Acceptance criteria:
 - A GUI can render command forms without parsing CLI help output.
 - A GUI can create a `ComposeExecutionRequest` without invoking Commander.
 - Tests can validate guided flows by passing fake answers into the resolver.
+
+## Epic 7 — Interactive stack browser
+
+### User story 7.1
+
+As a developer, I can scan a root directory, browse discovered stacks interactively, drill into services and run common operational actions without retyping commands.
+
+Tasks:
+
+- Add `compose browse [root]`.
+- Add `compose stacks [root]` as an alias.
+- Reuse the recursive scanner to list discovered stacks.
+- Add stack-level actions: `ps`, `up -d`, `build`, `stop`, `restart`, `logs`, `down`.
+- Add a nested service browser with service-level actions.
+- Confirm destructive stack actions before execution.
+- Support `--max-depth`, `--dry-run`, `--project-name`, `--profile` and `--no-ansi`.
+- Keep the browser workflow testable through injected prompt and execution dependencies.
+- Update README, CLI design and architecture documentation.
+
+Acceptance criteria:
+
+- `compose browse .` displays stacks discovered from the recursive scan.
+- Selecting a stack opens a stack action menu.
+- Selecting service exploration opens a service list based on parsed Compose services.
+- Stack actions generate normal `ComposeExecutionRequest` values.
+- Service actions can start, build, stop, restart, show logs or open a shell.
+- `down` requires explicit confirmation.
+- `--dry-run` prints generated Docker commands and does not execute Docker.

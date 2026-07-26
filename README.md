@@ -10,6 +10,7 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - Detect `docker-compose.yml`, `docker-compose.yaml`, `compose.yml` and `compose.yaml` at any depth.
 - List discovered projects with absolute paths and service names.
 - Select a project interactively.
+- Browse discovered stacks and services interactively.
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Create and maintain Compose project files with typed YAML validation.
@@ -22,6 +23,8 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 compose scan .
 compose scan C:\Sources --json
 compose select .
+compose browse .
+compose stacks C:\Sources --max-depth 6 --dry-run
 
 compose up --project ./infra --detach
 compose up --project ./infra --guided
@@ -45,6 +48,30 @@ compose project add-service api --project ./my-stack --image node:22-alpine --po
 compose project remove-service api --project ./my-stack
 compose project validate --project ./my-stack
 ```
+
+## Interactive stack browser
+
+Use `compose browse` when you want to scan a root directory and navigate stacks and services from menus instead of typing each command.
+
+```bash
+compose browse .
+compose browse C:\Sources --max-depth 8
+compose stacks . --dry-run
+```
+
+The browser lets you:
+
+- select a discovered stack from the scan result
+- inspect containers with `ps`
+- start a stack with `up -d`
+- build a stack
+- stop or restart a stack
+- show stack logs
+- open a nested service browser
+- start, build, stop, restart or show logs for a single service
+- open a shell with `docker compose exec <service> sh`
+
+Destructive stack actions such as `down` require an explicit confirmation. `--dry-run` prints the generated Docker command without executing it.
 
 ## Guided mode
 
@@ -87,13 +114,14 @@ compose up --project ./infra --guided --yes --dry-run
 
 ```text
 src/
-  cli/       terminal entrypoint, command registration and terminal adapters
-  guided/    UI-neutral guided command descriptors and option resolution
-  scanner/   recursive Compose file discovery
-  compose/   Docker Compose command building and execution
-  project/   project creation and service mutation
-  yaml/      YAML parsing, validation and writing
-  utils/     common filesystem, path, error and logging helpers
+  cli/          terminal entrypoint, command registration and terminal adapters
+  guided/       UI-neutral guided command descriptors and option resolution
+  interactive/  interactive stack and service browsing workflows
+  scanner/      recursive Compose file discovery
+  compose/      Docker Compose command building and execution
+  project/      project creation and service mutation
+  yaml/         YAML parsing, validation and writing
+  utils/        common filesystem, path, error and logging helpers
 docs/
   architecture.md
   cli-design.md
@@ -132,6 +160,7 @@ For local CLI testing:
 ```bash
 npm link
 compose --help
+compose browse . --dry-run
 ```
 
 ## Delivery discipline

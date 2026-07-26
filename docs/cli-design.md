@@ -14,6 +14,16 @@ compose select [root]
 compose browse [root]
 compose stacks [root]
 
+compose workspace add <name> <path>
+compose workspace remove <name>
+compose workspace use <name>
+compose workspace list
+compose workspace current
+
+compose favorites add <stack>
+compose favorites remove <stack>
+compose favorites list
+
 compose up [services...]
 compose down
 compose ps [services...]
@@ -33,6 +43,8 @@ compose project validate
 
 `compose stacks` is an alias for `compose browse`.
 
+When `compose browse` is called without `[root]`, it uses the current workspace root. If no workspace is configured, it falls back to `.`.
+
 `exec` and `run` accept an omitted service only when `--guided` is used. Without guided resolution, Docker Compose still needs a service name.
 
 ## Common Compose options
@@ -47,6 +59,39 @@ compose project validate
 --dry-run             print generated command without executing it
 --no-interactive      disable all prompts and fail when guidance would be required
 ```
+
+## Workspaces and favorites
+
+Workspaces are named local scan roots persisted in a user config file. Favorites are stack references scoped to a workspace.
+
+```bash
+compose workspace add dev C:\Sources
+compose workspace use dev
+compose browse
+```
+
+Config location:
+
+```text
+Windows:     %APPDATA%\compose\config.json
+Linux/macOS: ~/.config/compose/config.json
+```
+
+Workspace command behaviour:
+
+- `workspace add` creates or updates a named root and sets it as current when no current workspace exists.
+- `workspace use` changes the current workspace.
+- `workspace remove` removes favorites and recent stacks associated with the removed workspace.
+- `workspace current` prints the selected workspace.
+- `workspace list` marks the current workspace with `*`.
+
+Favorite command behaviour:
+
+- `favorites add <stack>` resolves `<stack>` by scanning the current workspace and matching stack name, id, relative path or compose file path.
+- `favorites remove <stack>` removes a favorite by stack name, relative path or compose file path.
+- `favorites list` shows favorites for the current workspace.
+
+The browser can also toggle a stack as favorite from the stack menu. Favorite stacks are displayed first and rendered with `★`.
 
 ## Guided mode
 
@@ -120,6 +165,8 @@ Stack-level actions:
 - restart the stack
 - show stack logs with a safe default tail
 - run `down` after explicit confirmation
+- toggle favorite state
+- refresh runtime status
 - enter the service browser
 
 Service-level actions:
@@ -222,6 +269,12 @@ Guided questions:
 ## Examples
 
 ```bash
+compose workspace add dev C:\Sources
+compose workspace use dev
+compose browse
+compose favorites add infra
+compose favorites list
+
 compose scan .
 compose scan . --json
 compose scan C:\Sources --max-depth 8

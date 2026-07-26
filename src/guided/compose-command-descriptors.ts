@@ -1,9 +1,17 @@
 import type { ComposeSubCommand } from '../compose/compose-command.js';
 import type { GuidedCommandDescriptor } from './guided-command-descriptor.js';
 
+const serviceSelection = (message: string): GuidedCommandDescriptor['serviceSelection'] => ({
+  required: false,
+  multiple: true,
+  message,
+  emptySelectionMeansAll: true,
+});
+
 const descriptors: Partial<Record<ComposeSubCommand, GuidedCommandDescriptor>> = {
   up: {
     command: 'up',
+    serviceSelection: serviceSelection('Select services to start. Leave empty for all services.'),
     options: [
       {
         key: 'detach',
@@ -72,14 +80,35 @@ const descriptors: Partial<Record<ComposeSubCommand, GuidedCommandDescriptor>> =
       },
     ],
   },
+  ps: {
+    command: 'ps',
+    serviceSelection: serviceSelection('Select services to inspect. Leave empty for all services.'),
+    options: [
+      {
+        key: 'all',
+        flag: '--all',
+        description: 'Show all containers.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Show all containers?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+      {
+        key: 'quiet',
+        flag: '--quiet',
+        description: 'Only display IDs.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Only display container IDs?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
   logs: {
     command: 'logs',
-    serviceSelection: {
-      required: false,
-      multiple: true,
-      message: 'Select services to show logs for. Leave empty for all services.',
-      emptySelectionMeansAll: true,
-    },
+    serviceSelection: serviceSelection('Select services to show logs for. Leave empty for all services.'),
     options: [
       {
         key: 'follow',
@@ -104,12 +133,7 @@ const descriptors: Partial<Record<ComposeSubCommand, GuidedCommandDescriptor>> =
   },
   build: {
     command: 'build',
-    serviceSelection: {
-      required: false,
-      multiple: true,
-      message: 'Select services to build. Leave empty for all services.',
-      emptySelectionMeansAll: true,
-    },
+    serviceSelection: serviceSelection('Select services to build. Leave empty for all services.'),
     options: [
       {
         key: 'noCache',
@@ -135,23 +159,273 @@ const descriptors: Partial<Record<ComposeSubCommand, GuidedCommandDescriptor>> =
   },
   pull: {
     command: 'pull',
-    serviceSelection: {
-      required: false,
-      multiple: true,
-      message: 'Select services to pull. Leave empty for all services.',
-      emptySelectionMeansAll: true,
-    },
+    serviceSelection: serviceSelection('Select services to pull. Leave empty for all services.'),
     options: [],
   },
   restart: {
     command: 'restart',
-    serviceSelection: {
-      required: false,
-      multiple: true,
-      message: 'Select services to restart. Leave empty for all services.',
-      emptySelectionMeansAll: true,
+    serviceSelection: serviceSelection('Select services to restart. Leave empty for all services.'),
+    options: [
+      {
+        key: 'timeout',
+        flag: '--timeout',
+        description: 'Shutdown timeout in seconds.',
+        valueType: 'string',
+        promptKind: 'input',
+        message: 'Shutdown timeout in seconds? Leave empty for Docker default.',
+        emptyInputMeansUnset: true,
+      },
+    ],
+  },
+  start: {
+    command: 'start',
+    serviceSelection: serviceSelection('Select services to start. Leave empty for all services.'),
+    options: [],
+  },
+  stop: {
+    command: 'stop',
+    serviceSelection: serviceSelection('Select services to stop. Leave empty for all services.'),
+    options: [
+      {
+        key: 'timeout',
+        flag: '--timeout',
+        description: 'Shutdown timeout in seconds.',
+        valueType: 'string',
+        promptKind: 'input',
+        message: 'Shutdown timeout in seconds? Leave empty for Docker default.',
+        emptyInputMeansUnset: true,
+      },
+    ],
+  },
+  create: {
+    command: 'create',
+    serviceSelection: serviceSelection('Select services to create. Leave empty for all services.'),
+    options: [
+      {
+        key: 'build',
+        flag: '--build',
+        description: 'Build images before creating containers.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Build images before creating containers?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+      {
+        key: 'removeOrphans',
+        flag: '--remove-orphans',
+        description: 'Remove containers for services not defined in the Compose file.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Remove orphan containers?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  pause: {
+    command: 'pause',
+    serviceSelection: serviceSelection('Select services to pause. Leave empty for all services.'),
+    options: [],
+  },
+  unpause: {
+    command: 'unpause',
+    serviceSelection: serviceSelection('Select services to unpause. Leave empty for all services.'),
+    options: [],
+  },
+  kill: {
+    command: 'kill',
+    serviceSelection: serviceSelection('Select services to kill. Leave empty for all services.'),
+    options: [
+      {
+        key: 'signal',
+        flag: '--signal',
+        description: 'Signal to send to containers.',
+        valueType: 'string',
+        promptKind: 'input',
+        message: 'Signal to send? Leave empty for Docker default.',
+        emptyInputMeansUnset: true,
+        destructive: true,
+      },
+    ],
+  },
+  rm: {
+    command: 'rm',
+    serviceSelection: serviceSelection('Select services to remove. Leave empty for stopped containers.'),
+    options: [
+      {
+        key: 'force',
+        flag: '--force',
+        description: 'Do not ask for confirmation.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Force removal without Docker confirmation?',
+        defaultValue: false,
+        safeDefault: false,
+        destructive: true,
+      },
+      {
+        key: 'stop',
+        flag: '--stop',
+        description: 'Stop containers before removing.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Stop containers before removing them?',
+        defaultValue: false,
+        safeDefault: false,
+        destructive: true,
+      },
+      {
+        key: 'volumes',
+        flag: '--volumes',
+        description: 'Remove anonymous volumes attached to containers.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Remove anonymous volumes?',
+        defaultValue: false,
+        safeDefault: false,
+        destructive: true,
+      },
+    ],
+  },
+  config: {
+    command: 'config',
+    options: [
+      {
+        key: 'quiet',
+        flag: '--quiet',
+        description: 'Only validate the configuration.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Only validate the configuration?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+      {
+        key: 'noInterpolate',
+        flag: '--no-interpolate',
+        description: 'Do not interpolate environment variables.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Disable environment interpolation?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  cp: {
+    command: 'cp',
+    passthrough: {
+      required: true,
+      message: 'Copy arguments as source and target, for example api:/tmp/file ./file.',
     },
     options: [],
+  },
+  events: {
+    command: 'events',
+    serviceSelection: serviceSelection('Select services to filter events. Leave empty for all services.'),
+    options: [
+      {
+        key: 'json',
+        flag: '--json',
+        description: 'Output events as JSON.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Output events as JSON?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  images: {
+    command: 'images',
+    serviceSelection: serviceSelection('Select services to list images for. Leave empty for all services.'),
+    options: [
+      {
+        key: 'quiet',
+        flag: '--quiet',
+        description: 'Only display image IDs.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Only display image IDs?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  ls: {
+    command: 'ls',
+    options: [
+      {
+        key: 'all',
+        flag: '--all',
+        description: 'Show stopped Compose projects.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Show stopped Compose projects?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+      {
+        key: 'quiet',
+        flag: '--quiet',
+        description: 'Only display project IDs.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Only display project IDs?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  port: {
+    command: 'port',
+    serviceSelection: {
+      required: true,
+      multiple: false,
+      message: 'Select the service to inspect.',
+    },
+    passthrough: {
+      required: true,
+      message: 'Private container port to resolve.',
+    },
+    options: [],
+  },
+  top: {
+    command: 'top',
+    serviceSelection: serviceSelection('Select services to inspect processes for. Leave empty for all services.'),
+    options: [],
+  },
+  version: {
+    command: 'version',
+    options: [
+      {
+        key: 'short',
+        flag: '--short',
+        description: 'Only show the version number.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Only show the version number?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
+  },
+  watch: {
+    command: 'watch',
+    serviceSelection: serviceSelection('Select services to watch. Leave empty for all services.'),
+    options: [
+      {
+        key: 'noUp',
+        flag: '--no-up',
+        description: 'Do not build and start services before watching.',
+        valueType: 'boolean',
+        promptKind: 'confirm',
+        message: 'Skip initial up before watching?',
+        defaultValue: false,
+        safeDefault: false,
+      },
+    ],
   },
   run: {
     command: 'run',

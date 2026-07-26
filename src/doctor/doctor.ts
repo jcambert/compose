@@ -252,15 +252,18 @@ async function checkCurrentWorkspace(workspaceStore: WorkspaceStore): Promise<Do
 
 function parseNodeVersion(version: string): { major: number; minor: number; patch: number } | undefined {
   const match = version.match(/^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)/);
+  const major = match?.groups?.major;
+  const minor = match?.groups?.minor;
+  const patch = match?.groups?.patch;
 
-  if (match?.groups === undefined) {
+  if (major === undefined || minor === undefined || patch === undefined) {
     return undefined;
   }
 
   return {
-    major: Number.parseInt(match.groups.major, 10),
-    minor: Number.parseInt(match.groups.minor, 10),
-    patch: Number.parseInt(match.groups.patch, 10),
+    major: Number.parseInt(major, 10),
+    minor: Number.parseInt(minor, 10),
+    patch: Number.parseInt(patch, 10),
   };
 }
 

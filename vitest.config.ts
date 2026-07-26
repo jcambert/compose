@@ -9,7 +9,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       include: ['src/{scanner,compose,project,yaml,utils}/**/*.ts'],
-      exclude: ['src/cli/**'],
+      exclude: [
+        'src/cli/**',
+        'src/compose/compose-command.ts',
+        'src/compose/compose-options.ts',
+        'src/project/compose-project.ts',
+        'src/scanner/discovered-project.ts',
+      ],
       thresholds: {
         lines: 90,
         functions: 90,

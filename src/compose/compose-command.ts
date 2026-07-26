@@ -12,7 +12,20 @@ export type ComposeSubCommand =
   | 'run'
   | 'stop'
   | 'start'
-  | 'config';
+  | 'create'
+  | 'pause'
+  | 'unpause'
+  | 'kill'
+  | 'rm'
+  | 'config'
+  | 'cp'
+  | 'events'
+  | 'images'
+  | 'ls'
+  | 'port'
+  | 'top'
+  | 'version'
+  | 'watch';
 
 export type ComposeExecutionRequest = {
   composeFilePath: string;

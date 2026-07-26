@@ -6,7 +6,13 @@ The release process keeps `compose` installable, smoke-tested and package-ready 
 
 ## Current package version
 
-The current package version is `0.1.0`.
+The current package version is `0.1.2`.
+
+The public npm package is:
+
+```bash
+npm install -g @jc90100/compose
+```
 
 Use patch/minor version changes deliberately:
 
@@ -55,6 +61,12 @@ The smoke test validates the built CLI entrypoint without requiring Docker:
 
 The smoke test also checks that `dist/cli/index.js` keeps the Node.js shebang.
 
+## CLI version source
+
+`compose --version` must use `package.json` as the single source of truth.
+
+Do not hard-code the CLI version in source files. Version bumps must update package metadata and should be covered by tests that compare the program version with `package.json`.
+
 ## Doctor diagnostics
 
 Use `compose doctor` on real developer machines before a release:
@@ -91,11 +103,28 @@ Recommended flow:
 ```bash
 git checkout main
 git pull
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 The tag workflow validates the package and performs a pack dry-run. npm publication remains an explicit manual action.
+
+## npm publication
+
+Publish the package from a validated release commit only:
+
+```bash
+npm publish --access public
+```
+
+Then verify the public package:
+
+```bash
+npm view @jc90100/compose version
+npm install -g @jc90100/compose@latest
+compose --version
+compose doctor
+```
 
 ## Repository hygiene
 

@@ -20,10 +20,11 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 
 ## Installation
 
-The package is prepared for global npm installation:
+The package is available for global npm installation:
 
 ```bash
-npm install -g @jcambert/compose
+npm install -g @jc90100/compose
+compose --version
 compose --help
 compose doctor
 ```

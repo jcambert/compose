@@ -13,8 +13,9 @@ import type { AddServiceOptions } from '../project/service-mutator.js';
 import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
 import type { ScanComposeFilesOptions } from '../scanner/compose-file-scanner.js';
 import { parseComposeDocument } from '../yaml/compose-parser.js';
-import { resolveComposeFilePath } from './project-resolver.js';
 import { inquirerPromptAdapter } from './inquirer-prompt-adapter.js';
+import { resolvePackageVersion } from './package-metadata.js';
+import { resolveComposeFilePath } from './project-resolver.js';
 
 export function createComposeCliProgram(): Command {
   const program = new Command();
@@ -22,7 +23,7 @@ export function createComposeCliProgram(): Command {
   program
     .name('compose')
     .description('Discover, manage and execute Docker Compose projects.')
-    .version('0.1.0');
+    .version(resolvePackageVersion());
 
   registerScanCommand(program);
   registerSelectCommand(program);

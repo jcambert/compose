@@ -1,0 +1,106 @@
+name: Workspaces Browser Patch
+
+on:
+  push:
+    branches:
+      - feature/workspaces-and-favorites
+    paths:
+      - .github/workflows/workspaces-browser-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/workspaces-and-favorites
+      - name: Patch stack browser workspace integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/interactive/stack-browser.ts')
+          content = path.read_text(encoding='utf-8')
+          replacements = [
+              ("  profile?: string[];\n};", "  profile?: string[];\n  workspaceName?: string;\n  favoriteStackIds?: string[];\n};"),
+              ("  readRuntimeStatus?: StackRuntimeStatusReader;\n  print?: (message: string) => void;", "  readRuntimeStatus?: StackRuntimeStatusReader;\n  setFavorite?: (project: DiscoveredComposeProject, favorite: boolean) => Promise<void>;\n  recordRecent?: (project: DiscoveredComposeProject) => Promise<void>;\n  print?: (message: string) => void;"),
+              ("type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh';", "type StackAction = 'ps' | 'up' | 'build' | 'stop' | 'restart' | 'logs' | 'down' | 'services' | 'refresh' | 'favorite';"),
+              ("  createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),\n  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),", "  createMenuChoice('▦', 'Services', 'explorer les services de cette stack', 'services'),\n  createMenuChoice('★', 'Favorite', 'ajouter ou retirer des favoris', 'favorite'),\n  createMenuChoice('↻', 'Refresh', 'rafraîchir les statuts runtime', 'refresh'),"),
+              ("  let runtimeStatuses = await readRuntimeStatuses(projects, options, dependencies);\n  let browsingStacks = true;", "  let runtimeStatuses = await readRuntimeStatuses(projects, options, dependencies);\n  const favoriteStackIds = new Set(options.favoriteStackIds ?? []);\n  let browsingStacks = true;"),
+              ("        ...createStackChoices(projects, runtimeStatuses),", "        ...createStackChoices(projects, runtimeStatuses, favoriteStackIds),"),
+              ("    const stackResult = await browseStack(project, options, runtimeStatuses, dependencies);", "    await dependencies.recordRecent?.(project);\n\n    const stackResult = await browseStack(project, options, runtimeStatuses, favoriteStackIds, dependencies);"),
+              ("  runtimeStatuses: Map<string, StackRuntimeStatus>,\n  dependencies: StackBrowserDependencies,", "  runtimeStatuses: Map<string, StackRuntimeStatus>,\n  favoriteStackIds: Set<string>,\n  dependencies: StackBrowserDependencies,"),
+              ("    if (action === 'services') {", "    if (action === 'favorite') {\n      const favorite = !favoriteStackIds.has(project.relativePath);\n\n      if (favorite) {\n        favoriteStackIds.add(project.relativePath);\n      } else {\n        favoriteStackIds.delete(project.relativePath);\n      }\n\n      await dependencies.setFavorite?.(project, favorite);\n      print(dependencies, favorite ? `Favorite added: ${project.name}` : `Favorite removed: ${project.name}`);\n      continue;\n    }\n\n    if (action === 'services') {"),
+              ("  if (action === 'services' || action === 'refresh') {", "  if (action === 'services' || action === 'refresh' || action === 'favorite') {"),
+              ("  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh'>, ComposeExecutionRequest> = {", "  const commandByAction: Record<Exclude<StackAction, 'services' | 'refresh' | 'favorite'>, ComposeExecutionRequest> = {"),
+              ("function formatProjectChoice(project: DiscoveredComposeProject, index: number, runtimeStatus: StackRuntimeStatus | undefined): string {\n  const detail = `${formatServiceCount(project.services.length)} · ${formatStackRuntimeLabel(project, runtimeStatus)} · ${project.relativePath}`;\n\n  return `${formatStackStateIcon(runtimeStatus)} ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;\n}", "function formatProjectChoice(\n  project: DiscoveredComposeProject,\n  index: number,\n  runtimeStatus: StackRuntimeStatus | undefined,\n  favorite: boolean,\n): string {\n  const detail = `${formatServiceCount(project.services.length)} · ${formatStackRuntimeLabel(project, runtimeStatus)} · ${project.relativePath}`;\n  const icon = favorite ? '★' : formatStackStateIcon(runtimeStatus);\n\n  return `${icon} ${`${index}. ${project.name}`.padEnd(18)} ${detail}`;\n}"),
+              ("    `Root: ${root}`,\n    `Stacks: ${projects.length}`,", "    `Root: ${root}`,\n    ...(options.workspaceName === undefined ? [] : [`Workspace: ${options.workspaceName}`]),\n    `Stacks: ${projects.length}`,"),
+          ]
+          for before, after in replacements:
+              if before not in content:
+                  raise SystemExit(f'Missing replacement target:\n{before}')
+              content = content.replace(before, after)
+
+          old_create_stack_choices = """export function createStackChoices(
+  projects: DiscoveredComposeProject[],
+  runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus> = new Map<string, StackRuntimeStatus>(),
+): PromptChoice[] {
+  return projects.map((project, index) => ({
+    name: formatProjectChoice(project, index + 1, runtimeStatuses.get(project.id)),
+    value: project.id,
+  }));
+}
+"""
+          new_create_stack_choices = """export function createStackChoices(
+  projects: DiscoveredComposeProject[],
+  runtimeStatuses: ReadonlyMap<string, StackRuntimeStatus> = new Map<string, StackRuntimeStatus>(),
+  favoriteStackIds: ReadonlySet<string> | string[] = new Set<string>(),
+): PromptChoice[] {
+  const favoriteSet = toFavoriteSet(favoriteStackIds);
+
+  return sortProjectsForBrowser(projects, favoriteSet).map((project, index) => ({
+    name: formatProjectChoice(project, index + 1, runtimeStatuses.get(project.id), favoriteSet.has(project.relativePath)),
+    value: project.id,
+  }));
+}
+
+export function sortProjectsForBrowser(projects: DiscoveredComposeProject[], favoriteStackIds: ReadonlySet<string> | string[] = new Set<string>()): DiscoveredComposeProject[] {
+  const favoriteSet = toFavoriteSet(favoriteStackIds);
+
+  return [...projects].sort((left, right) => {
+    const favoriteCompare = Number(favoriteSet.has(right.relativePath)) - Number(favoriteSet.has(left.relativePath));
+
+    if (favoriteCompare !== 0) {
+      return favoriteCompare;
+    }
+
+    return left.name.localeCompare(right.name) || left.relativePath.localeCompare(right.relativePath);
+  });
+}
+"""
+          if old_create_stack_choices not in content:
+              raise SystemExit('Missing createStackChoices block')
+          content = content.replace(old_create_stack_choices, new_create_stack_choices)
+
+          insert_before = "function printHomeMenu(\n"
+          helper = """function toFavoriteSet(favoriteStackIds: ReadonlySet<string> | string[]): ReadonlySet<string> {
+  return Array.isArray(favoriteStackIds) ? new Set(favoriteStackIds) : favoriteStackIds;
+}
+
+"""
+          if insert_before not in content:
+              raise SystemExit('Missing printHomeMenu insertion point')
+          content = content.replace(insert_before, helper + insert_before)
+
+          path.write_text(content, encoding='utf-8')
+          Path('.github/workflows/workspaces-browser-patch.yml').unlink()
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/interactive/stack-browser.ts .github/workflows/workspaces-browser-patch.yml
+          git commit -m "feat: integrate workspaces and favorites in browser"
+          git push

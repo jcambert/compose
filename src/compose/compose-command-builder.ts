@@ -14,6 +14,9 @@ const commandOptionBuilders: Record<ComposeSubCommand, (args: string[], request:
     addBoolean(args, request.options.volumes, '--volumes');
   },
   ps(args, request): void {
+    addBoolean(args, request.options.all, '--all');
+    addBoolean(args, request.options.quiet, '--quiet');
+    addValueOption(args, '--format', request.options.format);
     args.push(...request.services);
   },
   logs(args, request): void {
@@ -30,6 +33,7 @@ const commandOptionBuilders: Record<ComposeSubCommand, (args: string[], request:
     args.push(...request.services);
   },
   restart(args, request): void {
+    addValueOption(args, '--timeout', request.options.timeout);
     args.push(...request.services);
   },
   exec(args, request): void {
@@ -44,13 +48,70 @@ const commandOptionBuilders: Record<ComposeSubCommand, (args: string[], request:
     args.push(...request.services, ...request.passthroughArgs);
   },
   stop(args, request): void {
+    addValueOption(args, '--timeout', request.options.timeout);
     args.push(...request.services);
   },
   start(args, request): void {
     args.push(...request.services);
   },
-  config(): void {
-    return;
+  create(args, request): void {
+    addBoolean(args, request.options.build, '--build');
+    addBoolean(args, request.options.noBuild, '--no-build');
+    addBoolean(args, request.options.removeOrphans, '--remove-orphans');
+    args.push(...request.services);
+  },
+  pause(args, request): void {
+    args.push(...request.services);
+  },
+  unpause(args, request): void {
+    args.push(...request.services);
+  },
+  kill(args, request): void {
+    addValueOption(args, '--signal', request.options.signal);
+    args.push(...request.services);
+  },
+  rm(args, request): void {
+    addBoolean(args, request.options.force, '--force');
+    addBoolean(args, request.options.stop, '--stop');
+    addBoolean(args, request.options.volumes, '--volumes');
+    args.push(...request.services);
+  },
+  config(args, request): void {
+    addBoolean(args, request.options.quiet, '--quiet');
+    addBoolean(args, request.options.noInterpolate, '--no-interpolate');
+    addBoolean(args, request.options.servicesOnly, '--services');
+    addBoolean(args, request.options.volumesOnly, '--volumes');
+    addBoolean(args, request.options.profilesOnly, '--profiles');
+    addValueOption(args, '--format', request.options.format);
+  },
+  cp(args, request): void {
+    args.push(...request.passthroughArgs);
+  },
+  events(args, request): void {
+    addBoolean(args, request.options.json, '--json');
+    args.push(...request.services);
+  },
+  images(args, request): void {
+    addBoolean(args, request.options.quiet, '--quiet');
+    args.push(...request.services);
+  },
+  ls(args, request): void {
+    addBoolean(args, request.options.all, '--all');
+    addBoolean(args, request.options.quiet, '--quiet');
+    addValueOption(args, '--format', request.options.format);
+  },
+  port(args, request): void {
+    args.push(...request.services, ...request.passthroughArgs);
+  },
+  top(args, request): void {
+    args.push(...request.services);
+  },
+  version(args, request): void {
+    addBoolean(args, request.options.short, '--short');
+  },
+  watch(args, request): void {
+    addBoolean(args, request.options.noUp, '--no-up');
+    args.push(...request.services);
   },
 };
 
@@ -101,5 +162,5 @@ function quoteShellArg(value: string): string {
     return value;
   }
 
-  return `"${value.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\"')}"`;
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }

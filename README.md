@@ -11,8 +11,10 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - List discovered projects with absolute paths and service names.
 - Select a project interactively.
 - Execute Docker Compose commands through a reliable command builder.
+- Guide humans through command options with `--guided`.
 - Create and maintain Compose project files with typed YAML validation.
 - Keep the codebase modular, testable and distributable through npm.
+- Keep command descriptors UI-neutral so a future GUI can reuse them.
 
 ## Command examples
 
@@ -22,19 +24,51 @@ compose scan C:\Sources --json
 compose select .
 
 compose up --project ./infra --detach
+compose up --project ./infra --guided
+compose up --project ./infra --guided --yes --dry-run
+compose down --project ./infra --guided
 compose down --project ./infra --remove-orphans
 compose ps --project ./infra
+compose logs --project ./infra --guided
 compose logs --project ./infra --follow --tail 200
+compose build --project ./infra --guided
 compose build --project ./infra --no-cache
 compose pull --project ./infra
 compose restart --project ./infra api
+compose exec --project ./infra --guided
 compose exec --project ./infra api sh
+compose run --project ./infra --guided
 compose run --project ./infra --rm worker npm run migrate
 
 compose project init ./my-stack --name my-stack
 compose project add-service api --project ./my-stack --image node:22-alpine --port 3000:3000
 compose project remove-service api --project ./my-stack
 compose project validate --project ./my-stack
+```
+
+## Guided mode
+
+Use `--guided` when you want `compose` to ask useful questions before executing a Docker Compose command.
+
+Example:
+
+```bash
+compose up --project ./infra --guided
+```
+
+Typical questions:
+
+```text
+Start containers in detached mode?
+Build images before starting?
+Remove orphan containers?
+Scale services?
+```
+
+Use `--guided --yes` to accept safe guided defaults without prompts, and combine with `--dry-run` to preview the final Docker command.
+
+```bash
+compose up --project ./infra --guided --yes --dry-run
 ```
 
 ## Technical stack
@@ -53,7 +87,8 @@ compose project validate --project ./my-stack
 
 ```text
 src/
-  cli/       terminal entrypoint and command registration
+  cli/       terminal entrypoint, command registration and terminal adapters
+  guided/    UI-neutral guided command descriptors and option resolution
   scanner/   recursive Compose file discovery
   compose/   Docker Compose command building and execution
   project/   project creation and service mutation

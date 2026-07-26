@@ -53,6 +53,67 @@ compose pull [services...]
 compose watch [services...]
 ```
 
+## Browser command surface
+
+`compose browse` now exposes the same operational surface through typed `ComposeExecutionRequest` values. The browser does not build Docker command strings directly; it collects menu decisions and prompt answers, then delegates to the same command builder as explicit CLI commands.
+
+### Stack menu
+
+```text
+[Inspect] Services
+[Inspect] Favorite
+[Inspect] Refresh
+[Inspect] Status      -> ps
+[Inspect] Config      -> config
+[Inspect] Images      -> images
+[Inspect] Top         -> top
+[Inspect] Version     -> version
+[Lifecycle] Up        -> up -d
+[Lifecycle] Create    -> create
+[Lifecycle] Build     -> build
+[Lifecycle] Start     -> start
+[Lifecycle] Stop      -> stop
+[Lifecycle] Pause     -> pause
+[Lifecycle] Unpause   -> unpause
+[Lifecycle] Restart   -> restart
+[Tools] Logs          -> logs --tail 100
+[Tools] Port          -> port <selected-service> <private-port>
+[Tools] Copy file     -> cp <source> <target>
+[Danger] Kill         -> kill [--signal]
+[Danger] Remove       -> rm [--force] [--stop] [--volumes]
+[Danger] Down         -> down
+```
+
+### Service menu
+
+```text
+[Inspect] Refresh
+[Lifecycle] Up service       -> up -d <service>
+[Lifecycle] Create service   -> create <service>
+[Lifecycle] Build service    -> build <service>
+[Lifecycle] Start service    -> start <service>
+[Lifecycle] Stop service     -> stop <service>
+[Lifecycle] Pause service    -> pause <service>
+[Lifecycle] Unpause service  -> unpause <service>
+[Lifecycle] Restart service  -> restart <service>
+[Tools] Logs service         -> logs --tail 100 <service>
+[Tools] Top service          -> top <service>
+[Tools] Port service         -> port <service> <private-port>
+[Tools] Shell                -> exec <service> sh
+[Danger] Kill service        -> kill <service> [--signal]
+[Danger] Remove service      -> rm <service> [--force] [--stop] [--volumes]
+```
+
+### Browser prompts and safety
+
+- `down`, `kill` and `rm` require an explicit confirmation before a request is created.
+- `kill` prompts for an optional `--signal` value.
+- `rm` prompts for `--force`, `--stop` and `--volumes`.
+- stack-level `port` asks for the target service when the stack has multiple services, then asks for the private container port.
+- service-level `port` asks only for the private container port.
+- `cp` asks for source and target paths.
+- `--dry-run` prints the generated Docker command and does not execute Docker.
+
 ## Common options
 
 Every command goes through the same global option handling:
@@ -100,4 +161,4 @@ compose cp --project ./infra api:/tmp/file.txt ./file.txt --dry-run
 - Command registration stays in the CLI layer.
 - Command building stays in the `compose` module.
 - Guided questions stay descriptor-driven under `guided`.
-- The browser keeps using typed `ComposeExecutionRequest` values so more actions can be added without creating a separate command model.
+- The browser keeps using typed `ComposeExecutionRequest` values instead of creating a separate menu-specific command model.

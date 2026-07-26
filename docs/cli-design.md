@@ -11,6 +11,8 @@ Rationale: the user types a command, so adding `cli` to the binary name is redun
 ```text
 compose scan [root]
 compose select [root]
+compose browse [root]
+compose stacks [root]
 
 compose up [services...]
 compose down
@@ -28,6 +30,8 @@ compose project remove-service <service>
 compose project update-service <service>
 compose project validate
 ```
+
+`compose stacks` is an alias for `compose browse`.
 
 `exec` and `run` accept an omitted service only when `--guided` is used. Without guided resolution, Docker Compose still needs a service name.
 
@@ -86,6 +90,48 @@ docker compose -f ./infra/compose.yaml up -d --remove-orphans --scale api=2
 - If a Compose file can be parsed, guided service selection uses the service names from the file.
 - If a required service is missing and no service list is available, guided mode asks for a service name as text.
 - The final resolved request remains printable with `--dry-run`.
+
+## Interactive stack browser
+
+`compose browse [root]` scans a root directory, displays discovered stacks, then lets the user navigate interactively across stack-level and service-level actions.
+
+Alias:
+
+```bash
+compose stacks .
+```
+
+Browser options:
+
+```text
+--max-depth <depth>    maximum recursive scan depth
+--project-name <name>  Docker Compose project name
+--profile <profile>   Compose profile, repeatable
+--dry-run             print generated Docker commands without executing them
+--no-ansi             disable ANSI output from docker compose
+```
+
+Stack-level actions:
+
+- inspect containers with `ps`
+- start the full stack with `up -d`
+- build the full stack
+- stop the stack
+- restart the stack
+- show stack logs with a safe default tail
+- run `down` after explicit confirmation
+- enter the service browser
+
+Service-level actions:
+
+- start one service with `up -d <service>`
+- build one service
+- stop one service
+- restart one service
+- show service logs with a safe default tail
+- open a shell with `exec <service> sh`
+
+The browser is a terminal UX on top of the same scan and Compose execution primitives. It must not become the only way to perform an action; every generated action should remain scriptable through explicit commands.
 
 ## Command-specific options
 
@@ -179,6 +225,8 @@ Guided questions:
 compose scan .
 compose scan . --json
 compose scan C:\Sources --max-depth 8
+compose browse .
+compose stacks C:\Sources --max-depth 6 --dry-run
 
 compose up --project ./infra -d
 compose up --project ./infra --guided
@@ -192,14 +240,9 @@ compose down --project ./infra --remove-orphans
 
 ## Interactive mode
 
-`compose select` performs a recursive scan, lets the user choose a discovered project, then asks for the intended action.
+`compose select` remains a lightweight selector for quick project/action selection.
 
-Initial actions:
-
-- `ps`
-- `up -d`
-- `logs --follow`
-- `down`
+`compose browse` is the richer interactive workflow. It is the preferred terminal experience for moving across stacks, drilling into services and executing operational actions without memorising or retyping commands.
 
 ## Scriptability rule
 

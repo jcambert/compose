@@ -53,6 +53,7 @@ compose doctor
 The smoke test validates the built CLI entrypoint without requiring Docker:
 
 - `compose --help`
+- `compose --version`
 - `compose scan --help`
 - `compose browse --help`
 - `compose workspace --help`
@@ -66,6 +67,21 @@ The smoke test also checks that `dist/cli/index.js` keeps the Node.js shebang.
 `compose --version` must use `package.json` as the single source of truth.
 
 Do not hard-code the CLI version in source files. Version bumps must update package metadata and should be covered by tests that compare the program version with `package.json`.
+
+## Package metadata
+
+The npm package name, version and repository metadata must stay aligned before any release.
+
+Trusted Publishing requires `package.json` to identify the GitHub repository used by the publishing workflow:
+
+```json
+"repository": {
+  "type": "git",
+  "url": "https://github.com/jcambert/compose"
+}
+```
+
+Do not remove or rewrite this repository URL unless the GitHub repository changes.
 
 ## Doctor diagnostics
 
@@ -104,7 +120,13 @@ permissions:
   id-token: write
 ```
 
-The npm package `@jc90100/compose` must be configured on npmjs.com with a trusted publisher targeting this repository and the `release.yml` workflow.
+The release workflow must run on a Node.js/npm combination supported by npm Trusted Publishing. Use Node.js `24` in the release workflow.
+
+The npm package `@jc90100/compose` must be configured on npmjs.com with a trusted publisher targeting:
+
+- repository: `jcambert/compose`
+- workflow filename: `release.yml`
+- allowed action: `npm publish`
 
 ## Tagging
 

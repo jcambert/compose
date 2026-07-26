@@ -53,16 +53,17 @@ function createRuntimeStatusMap(projects: DiscoveredComposeProject[]): Map<strin
   return new Map(projects.map((project) => [project.id, createRuntimeStatus(project)]));
 }
 
-function createPromptAdapter(selects: string[], confirms: boolean[] = []): PromptAdapter {
+function createPromptAdapter(selects: string[], confirms: boolean[] = [], inputs: string[] = []): PromptAdapter {
   const remainingSelects = [...selects];
   const remainingConfirms = [...confirms];
+  const remainingInputs = [...inputs];
 
   return {
     async confirm(): Promise<boolean> {
       return remainingConfirms.shift() ?? false;
     },
     async input(): Promise<string> {
-      return '';
+      return remainingInputs.shift() ?? '';
     },
     async checkbox(): Promise<string[]> {
       return [];
@@ -270,6 +271,119 @@ describe('stack browser', () => {
     expect(executedRequests[0]).toMatchObject({ command: 'build', services: ['api'] });
   });
 
+  it('creates a stack port request from the browser prompts', async () => {
+    const executedRequests: ComposeExecutionRequest[] = [];
+    const project = createProject();
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([project.id, 'port', 'db', stackBrowserValues.back, stackBrowserValues.quit], [], ['5432']),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async execute(request) {
+          executedRequests.push(request);
+          return createExecutionResult(request);
+        },
+      },
+    );
+
+    expect(executedRequests).toHaveLength(1);
+    expect(executedRequests[0]).toMatchObject({ command: 'port', services: ['db'], passthroughArgs: ['5432'] });
+  });
+
+  it('creates a copy request from stack browser prompts', async () => {
+    const executedRequests: ComposeExecutionRequest[] = [];
+    const project = createProject();
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([project.id, 'cp', stackBrowserValues.back, stackBrowserValues.quit], [], ['api:/tmp/log.txt', './log.txt']),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async execute(request) {
+          executedRequests.push(request);
+          return createExecutionResult(request);
+        },
+      },
+    );
+
+    expect(executedRequests).toHaveLength(1);
+    expect(executedRequests[0]).toMatchObject({ command: 'cp', services: [], passthroughArgs: ['api:/tmp/log.txt', './log.txt'] });
+  });
+
+  it('creates a kill request only after confirmation and optional signal prompt', async () => {
+    const executedRequests: ComposeExecutionRequest[] = [];
+    const project = createProject();
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([project.id, 'kill', stackBrowserValues.back, stackBrowserValues.quit], [true], ['SIGTERM']),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async execute(request) {
+          executedRequests.push(request);
+          return createExecutionResult(request);
+        },
+      },
+    );
+
+    expect(executedRequests).toHaveLength(1);
+    expect(executedRequests[0]).toMatchObject({ command: 'kill', services: [], options: { signal: 'SIGTERM' } });
+  });
+
+  it('creates a service remove request with prompted options', async () => {
+    const executedRequests: ComposeExecutionRequest[] = [];
+    const project = createProject();
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([
+          project.id,
+          'services',
+          'api',
+          'rm',
+          stackBrowserValues.back,
+          stackBrowserValues.back,
+          stackBrowserValues.back,
+          stackBrowserValues.quit,
+        ], [true, true, true, false]),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async execute(request) {
+          executedRequests.push(request);
+          return createExecutionResult(request);
+        },
+      },
+    );
+
+    expect(executedRequests).toHaveLength(1);
+    expect(executedRequests[0]).toMatchObject({ command: 'rm', services: ['api'], options: { force: true, stop: true, volumes: false } });
+  });
+
   it('does not execute down when the destructive confirmation is rejected', async () => {
     const executedRequests: ComposeExecutionRequest[] = [];
     const project = createProject();
@@ -279,6 +393,32 @@ describe('stack browser', () => {
       {},
       {
         prompts: createPromptAdapter([project.id, 'down', stackBrowserValues.back, stackBrowserValues.quit], [false]),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async execute(request) {
+          executedRequests.push(request);
+          return createExecutionResult(request);
+        },
+      },
+    );
+
+    expect(result.executedActions).toBe(0);
+    expect(executedRequests).toHaveLength(0);
+  });
+
+  it('does not execute kill when the destructive confirmation is rejected', async () => {
+    const executedRequests: ComposeExecutionRequest[] = [];
+    const project = createProject();
+
+    const result = await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([project.id, 'kill', stackBrowserValues.back, stackBrowserValues.quit], [false]),
         async scan() {
           return [project];
         },

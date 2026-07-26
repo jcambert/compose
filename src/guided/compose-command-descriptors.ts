@@ -1,7 +1,7 @@
 import type { ComposeSubCommand } from '../compose/compose-command.js';
-import type { GuidedCommandDescriptor } from './guided-command-descriptor.js';
+import type { GuidedCommandDescriptor, GuidedServiceSelectionDescriptor } from './guided-command-descriptor.js';
 
-const serviceSelection = (message: string): GuidedCommandDescriptor['serviceSelection'] => ({
+const serviceSelection = (message: string): GuidedServiceSelectionDescriptor => ({
   required: false,
   multiple: true,
   message,

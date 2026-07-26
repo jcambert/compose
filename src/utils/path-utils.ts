@@ -5,5 +5,5 @@ export function toAbsolutePath(path: string): string {
 }
 
 export function normalisePathForDisplay(path: string): string {
-  return path.replaceAll('\\\\', '/');
+  return path.replaceAll('\\', '/');
 }

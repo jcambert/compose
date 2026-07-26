@@ -16,4 +16,7 @@ export type ComposeCommandOptions = {
   profile?: string[];
   dryRun?: boolean;
   noAnsi?: boolean;
+  guided?: boolean;
+  yes?: boolean;
+  interactive?: boolean;
 };

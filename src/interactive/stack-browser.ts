@@ -299,6 +299,10 @@ async function createStackActionRequest(
   options: StackBrowserOptions,
   dependencies: StackBrowserDependencies,
 ): Promise<ComposeExecutionRequest | undefined> {
+  if (action === 'services') {
+    return undefined;
+  }
+
   if (action === 'down') {
     const confirmed = await dependencies.prompts.confirm({
       message: `Confirmer l'arrêt complet de la stack ${project.name} avec docker compose down ?`,

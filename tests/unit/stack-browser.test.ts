@@ -91,9 +91,20 @@ describe('stack browser', () => {
     const choices = createStackChoices(projects, createRuntimeStatusMap(projects));
 
     expect(choices).toEqual([
-      { name: '◐ 1. infra           2 services · 1 running · 1 stopped · infra/compose.yaml', value: 'stack-1' },
-      { name: '? 2. broken          no services · 1 warning(s) · broken/compose.yaml', value: 'stack-2' },
+      { name: '? 1. broken          no services · 1 warning(s) · broken/compose.yaml', value: 'stack-2' },
+      { name: '◐ 2. infra           2 services · 1 running · 1 stopped · infra/compose.yaml', value: 'stack-1' },
     ]);
+  });
+
+  it('puts favorite stacks first in browser choices', () => {
+    const projects = [
+      createProject({ id: 'stack-2', name: 'monitoring', relativePath: 'monitoring/compose.yaml' }),
+      createProject(),
+    ];
+    const choices = createStackChoices(projects, createRuntimeStatusMap(projects), ['infra/compose.yaml']);
+
+    expect(choices[0]).toEqual({ name: '★ 1. infra           2 services · 1 running · 1 stopped · infra/compose.yaml', value: 'stack-1' });
+    expect(choices[1]?.value).toBe('stack-2');
   });
 
   it('creates Compose execution requests from stack context', () => {
@@ -127,7 +138,7 @@ describe('stack browser', () => {
 
     await browseComposeStacks(
       '.',
-      {},
+      { workspaceName: 'dev' },
       {
         prompts: createPromptAdapter([stackBrowserValues.quit]),
         async scan() {
@@ -143,6 +154,7 @@ describe('stack browser', () => {
     );
 
     expect(printedMessages[0]).toContain('Compose Browser');
+    expect(printedMessages[0]).toContain('Workspace: dev');
     expect(printedMessages[0]).toContain('Stacks: 1');
     expect(printedMessages[0]).toContain('Runtime: 0 running · 1 partial · 0 stopped · 0 unavailable');
     expect(printedMessages[0]).toContain('Navigate with arrows');
@@ -174,6 +186,30 @@ describe('stack browser', () => {
     expect(result.failedActions).toBe(0);
     expect(executedRequests).toHaveLength(1);
     expect(executedRequests[0]).toMatchObject({ command: 'ps', services: [] });
+  });
+
+  it('toggles favorite state from the stack menu', async () => {
+    const project = createProject();
+    const favoriteChanges: boolean[] = [];
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([project.id, 'favorite', 'favorite', stackBrowserValues.back, stackBrowserValues.quit]),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
+        async setFavorite(_project, favorite) {
+          favoriteChanges.push(favorite);
+        },
+      },
+    );
+
+    expect(favoriteChanges).toEqual([true, false]);
   });
 
   it('refreshes runtime status from the interactive browser', async () => {

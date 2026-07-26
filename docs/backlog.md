@@ -98,3 +98,45 @@ Acceptance criteria:
 - CI remains green before merge.
 - Coverage trend is visible.
 - Documentation matches implemented command behaviour.
+
+## Epic 6 — Guided command mode and GUI readiness
+
+### User story 6.1
+
+As a developer, I can ask `compose` to guide me through command options before executing Docker Compose.
+
+Tasks:
+
+- Add `--guided`, `--yes` and `--no-interactive` global behaviours.
+- Define command descriptors and option descriptors for Compose commands.
+- Add prompt plans for `up`, `down`, `logs`, `build`, `run` and `exec`.
+- Add confirmation prompts for destructive options such as `down --volumes`.
+- Ensure guided answers resolve to the same `ComposeExecutionRequest` model as explicit flags.
+- Add tests for guided option resolution without relying on terminal input.
+- Update CLI examples and command documentation.
+
+Acceptance criteria:
+
+- `compose up --guided` asks whether detached mode should be enabled.
+- `compose down --guided` clearly marks volume removal as destructive.
+- `compose logs --guided` can ask whether logs should be followed and how many lines should be shown.
+- `compose --no-interactive` never prompts and fails clearly when required data is missing.
+- `compose --dry-run --guided` previews the final resolved command.
+
+### User story 6.2
+
+As a future GUI developer, I can build forms on top of the same descriptors and application services used by the CLI.
+
+Tasks:
+
+- Keep command descriptors UI-neutral.
+- Keep prompt adapters separate from command building and execution.
+- Expose reusable command metadata for documentation and GUI rendering.
+- Avoid terminal-specific business rules inside application services.
+- Add architectural documentation for GUI readiness.
+
+Acceptance criteria:
+
+- A GUI can render command forms without parsing CLI help output.
+- A GUI can create a `ComposeExecutionRequest` without invoking Commander.
+- Tests can validate guided flows by passing fake answers into the resolver.

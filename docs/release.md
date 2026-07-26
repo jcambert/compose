@@ -94,7 +94,17 @@ CI validates every branch and pull request with:
 7. `npm run smoke`
 8. `npm run pack:dry-run`
 
-The release workflow can be started manually and also reacts to `v*` tags. Manual publishing requires the `publish` input to be set to `true` and `NPM_TOKEN` to be configured in repository secrets.
+The release workflow can be started manually and also reacts to `v*` tags. Manual publishing requires the `publish` input to be set to `true`.
+
+npm publication from GitHub Actions uses npm Trusted Publishing through OpenID Connect. The release workflow must keep the following permissions:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+```
+
+The npm package `@jc90100/compose` must be configured on npmjs.com with a trusted publisher targeting this repository and the `release.yml` workflow.
 
 ## Tagging
 
@@ -111,7 +121,9 @@ The tag workflow validates the package and performs a pack dry-run. npm publicat
 
 ## npm publication
 
-Publish the package from a validated release commit only:
+Publish the package from a validated release commit only by running the GitHub `Release` workflow manually with `publish=true`.
+
+The workflow runs:
 
 ```bash
 npm publish --access public

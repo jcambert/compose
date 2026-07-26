@@ -3,6 +3,14 @@
   "version": "0.1.2",
   "description": "Professional Node.js CLI for discovering, managing and executing Docker Compose projects.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jcambert/compose"
+  },
+  "bugs": {
+    "url": "https://github.com/jcambert/compose/issues"
+  },
+  "homepage": "https://github.com/jcambert/compose#readme",
   "bin": {
     "compose": "./dist/cli/index.js"
   },

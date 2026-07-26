@@ -8,6 +8,8 @@ import {
   createStackChoices,
   stackBrowserValues,
 } from '../../src/interactive/stack-browser.js';
+import { createStackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
+import type { StackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../../src/scanner/discovered-project.js';
 
 function createProject(overrides: Partial<DiscoveredComposeProject> = {}): DiscoveredComposeProject {
@@ -21,6 +23,29 @@ function createProject(overrides: Partial<DiscoveredComposeProject> = {}): Disco
     warnings: [],
     ...overrides,
   };
+}
+
+function createRuntimeStatus(project: DiscoveredComposeProject = createProject()): StackRuntimeStatus {
+  return createStackRuntimeStatus(project, [
+    {
+      serviceName: 'api',
+      state: 'running',
+      containerCount: 1,
+      ports: ['0.0.0.0:3000->3000/tcp'],
+      containerNames: ['infra-api-1'],
+    },
+    {
+      serviceName: 'db',
+      state: 'stopped',
+      containerCount: 0,
+      ports: [],
+      containerNames: [],
+    },
+  ]);
+}
+
+function createRuntimeStatusMap(projects: DiscoveredComposeProject[]): Map<string, StackRuntimeStatus> {
+  return new Map(projects.map((project) => [project.id, createRuntimeStatus(project)]));
 }
 
 function createPromptAdapter(selects: string[], confirms: boolean[] = []): PromptAdapter {
@@ -53,15 +78,16 @@ function createExecutionResult(request: ComposeExecutionRequest, exitCode = 0): 
 }
 
 describe('stack browser', () => {
-  it('creates readable menu stack choices from scan results', () => {
-    const choices = createStackChoices([
+  it('creates readable menu stack choices with live runtime status', () => {
+    const projects = [
       createProject(),
       createProject({ id: 'stack-2', name: 'broken', relativePath: 'broken/compose.yaml', services: [], warnings: ['invalid yaml'] }),
-    ]);
+    ];
+    const choices = createStackChoices(projects, createRuntimeStatusMap(projects));
 
     expect(choices).toEqual([
-      { name: '▣ 1. infra           2 services · ready · infra/compose.yaml', value: 'stack-1' },
-      { name: '▣ 2. broken          no services · 1 warning(s) · broken/compose.yaml', value: 'stack-2' },
+      { name: '◐ 1. infra           2 services · 1 running · 1 stopped · infra/compose.yaml', value: 'stack-1' },
+      { name: '? 2. broken          no services · 1 warning(s) · broken/compose.yaml', value: 'stack-2' },
     ]);
   });
 
@@ -90,7 +116,7 @@ describe('stack browser', () => {
     });
   });
 
-  it('prints a home menu before choosing a stack', async () => {
+  it('prints a home menu with runtime overview before choosing a stack', async () => {
     const printedMessages: string[] = [];
     const project = createProject();
 
@@ -102,6 +128,9 @@ describe('stack browser', () => {
         async scan() {
           return [project];
         },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
         print(message) {
           printedMessages.push(message);
         },
@@ -110,6 +139,7 @@ describe('stack browser', () => {
 
     expect(printedMessages[0]).toContain('Compose Browser');
     expect(printedMessages[0]).toContain('Stacks: 1');
+    expect(printedMessages[0]).toContain('Runtime: 0 running · 1 partial · 0 stopped · 0 unavailable');
     expect(printedMessages[0]).toContain('Navigate with arrows');
   });
 
@@ -125,6 +155,9 @@ describe('stack browser', () => {
         async scan() {
           return [project];
         },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
         async execute(request) {
           executedRequests.push(request);
           return createExecutionResult(request);
@@ -136,6 +169,28 @@ describe('stack browser', () => {
     expect(result.failedActions).toBe(0);
     expect(executedRequests).toHaveLength(1);
     expect(executedRequests[0]).toMatchObject({ command: 'ps', services: [] });
+  });
+
+  it('refreshes runtime status from the interactive browser', async () => {
+    const project = createProject();
+    let refreshCount = 0;
+
+    await browseComposeStacks(
+      '.',
+      {},
+      {
+        prompts: createPromptAdapter([stackBrowserValues.refresh, stackBrowserValues.quit]),
+        async scan() {
+          return [project];
+        },
+        async readRuntimeStatus() {
+          refreshCount += 1;
+          return createRuntimeStatus(project);
+        },
+      },
+    );
+
+    expect(refreshCount).toBe(2);
   });
 
   it('executes a service action from the nested service browser', async () => {
@@ -158,6 +213,9 @@ describe('stack browser', () => {
         ]),
         async scan() {
           return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
         },
         async execute(request) {
           executedRequests.push(request);
@@ -183,6 +241,9 @@ describe('stack browser', () => {
         async scan() {
           return [project];
         },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
+        },
         async execute(request) {
           executedRequests.push(request);
           return createExecutionResult(request);
@@ -206,6 +267,9 @@ describe('stack browser', () => {
         prompts: createPromptAdapter([project.id, 'up', stackBrowserValues.back, stackBrowserValues.quit]),
         async scan() {
           return [project];
+        },
+        async readRuntimeStatus() {
+          return createRuntimeStatus(project);
         },
         async execute(request) {
           executedRequests.push(request);

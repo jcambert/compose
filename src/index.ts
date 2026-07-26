@@ -2,6 +2,7 @@ export * from './compose/compose-command.js';
 export * from './compose/compose-command-builder.js';
 export * from './compose/compose-executor.js';
 export * from './compose/compose-options.js';
+export * from './doctor/doctor.js';
 export * from './guided/compose-command-descriptors.js';
 export * from './guided/guided-command-descriptor.js';
 export * from './guided/guided-command-resolver.js';

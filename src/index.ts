@@ -6,6 +6,7 @@ export * from './guided/compose-command-descriptors.js';
 export * from './guided/guided-command-descriptor.js';
 export * from './guided/guided-command-resolver.js';
 export * from './interactive/stack-browser.js';
+export * from './interactive/stack-runtime-status.js';
 export * from './project/compose-project.js';
 export * from './project/project-factory.js';
 export * from './project/service-mutator.js';

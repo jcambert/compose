@@ -11,6 +11,7 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - List discovered projects with absolute paths and service names.
 - Select a project interactively.
 - Browse discovered stacks and services interactively.
+- Display live stack and service runtime status in the browser.
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Create and maintain Compose project files with typed YAML validation.
@@ -59,30 +60,45 @@ compose browse C:\Sources --max-depth 8
 compose stacks . --dry-run
 ```
 
-The browser is menu-first and designed for day-to-day terminal usage:
+The browser is menu-first and designed for day-to-day terminal usage. It reads live state with `docker compose ps --format json` and falls back cleanly when Docker is unavailable.
 
 ```text
 ╭─ Compose Browser ──────────────────────────────────────────────
 │ Root: .
 │ Stacks: 3
+│ Runtime: 1 running · 1 partial · 1 stopped · 0 unavailable
 │ Mode: execute commands
 │ Navigate with arrows, press Enter to select.
 ╰──────────────────────────────────────────────────────────────────
 ? Select a stack
-  ▣ 1. infra           4 services · ready · infra/compose.yaml
-  ▣ 2. monitoring      2 services · ready · monitoring/compose.yml
+  ● 1. infra           4 services · 4 running · 0 stopped · infra/compose.yaml
+  ◐ 2. monitoring      2 services · 1 running · 1 stopped · monitoring/compose.yml
+  ↻ Refresh            rafraîchir les statuts runtime
   ✕ Quit               fermer le browser
+```
+
+Stack and service menus include runtime context before asking for an action:
+
+```text
+╭─ Services: infra ───────────────────────────────────────────────
+│ File: infra/compose.yaml
+│ Runtime: 3 running · 1 stopped
+│ ● api                running · 1 container · 0.0.0.0:5000->80/tcp
+│ ● db                 running · 1 container · 5432/tcp
+│ ○ worker             stopped · 0 containers
+╰──────────────────────────────────────────────────────────────────
 ```
 
 The stack and service menus use short action labels with command previews:
 
 ```text
 ▦ Services          explorer les services de cette stack
+↻ Refresh           rafraîchir les statuts runtime
 ● Status            docker compose ps
 ▶ Start             docker compose up -d
 ◆ Build             docker compose build
 ■ Stop              docker compose stop
-↻ Restart           docker compose restart
+↺ Restart           docker compose restart
 ◷ Logs              docker compose logs --tail 100
 ⚠ Down              arrêter et retirer les conteneurs
 ```
@@ -90,6 +106,8 @@ The stack and service menus use short action labels with command previews:
 The browser lets you:
 
 - select a discovered stack from the scan result
+- see running, stopped, unhealthy and unavailable runtime states
+- refresh runtime status without leaving the menu
 - inspect containers with `ps`
 - start a stack with `up -d`
 - build a stack
@@ -99,7 +117,7 @@ The browser lets you:
 - start, build, stop, restart or show logs for a single service
 - open a shell with `docker compose exec <service> sh`
 
-Destructive stack actions such as `down` require an explicit confirmation. `--dry-run` prints the generated Docker command without executing it.
+Destructive stack actions such as `down` require an explicit confirmation. `--dry-run` prints the generated Docker command without executing it and does not call Docker for runtime status.
 
 ## Guided mode
 

@@ -51,6 +51,10 @@ Targets:
 - Interactive stack browser request generation.
 - Interactive stack and service action flows with fake prompts and fake execution.
 - Browser favorite sorting and favorite toggle callbacks.
+- Browser full command surface request generation for stack actions.
+- Browser full command surface request generation for service actions.
+- Browser prompts for `kill --signal`, `rm --force --stop --volumes`, `port` and `cp`.
+- Browser destructive confirmation rejection for `down`, `kill` and `rm`.
 - Runtime status command generation for `docker compose ps --format json`.
 - Runtime status parsing for JSON array and newline-delimited JSON output.
 - Runtime status fallback when Docker is unavailable.
@@ -75,6 +79,7 @@ Targets:
 - Guided dry-run command resolution without running Docker.
 - Interactive browser dry-run command generation.
 - Browser live-status rendering with fake runtime status readers.
+- Browser full command surface dry-run previews for operational actions.
 - Browse without root using a configured current workspace.
 
 ### Optional Docker tests

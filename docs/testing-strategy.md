@@ -19,8 +19,11 @@ Coverage includes executable core modules:
 
 - `scanner`
 - `compose`
+- `doctor`
 - `guided`
+- `interactive`
 - `project`
+- `workspace`
 - `yaml`
 - `utils`
 
@@ -29,6 +32,8 @@ Coverage excludes CLI wiring and source files that only export TypeScript types.
 Interactive stack browser workflows are covered with unit tests that inject fake prompt adapters, fake scan results, fake runtime status readers and fake Compose executors. This keeps menu logic testable without running Docker or requiring a terminal session.
 
 Workspace store behaviour is covered with pure unit tests and temporary JSON config paths. CLI command wiring remains thin and is validated indirectly through the underlying workspace functions.
+
+Doctor diagnostics are covered with fake command runners and temporary workspace stores so tests do not depend on Docker availability.
 
 ## Test categories
 
@@ -43,6 +48,9 @@ Targets:
 - Service mutations.
 - Compose command generation.
 - Compose execution through injectable process runners.
+- Doctor Node.js version validation.
+- Doctor Docker and Docker Compose checks through injectable runners.
+- Doctor config and workspace diagnostics.
 - Guided command descriptors.
 - Guided option resolution with fake prompt adapters.
 - Guided safe defaults through `--guided --yes`.
@@ -82,6 +90,34 @@ Targets:
 - Browser full command surface dry-run previews for operational actions.
 - Browse without root using a configured current workspace.
 
+### CLI smoke tests
+
+`npm run smoke` validates the built CLI entrypoint after `npm run build`.
+
+The smoke test covers:
+
+- `compose --help`
+- `compose scan --help`
+- `compose browse --help`
+- `compose workspace --help`
+- `compose doctor --help`
+- `compose doctor --skip-docker`
+- shebang preservation on `dist/cli/index.js`
+
+The smoke test sets `COMPOSE_CONFIG_PATH` to a temporary path so it never mutates the developer or CI user config.
+
+### Package tests
+
+`npm run pack:dry-run` validates npm package contents without publishing.
+
+This protects:
+
+- `bin.compose`
+- packaged `dist`
+- packaged documentation
+- `CHANGELOG.md`
+- npm metadata
+
 ### Optional Docker tests
 
 Docker-backed tests must be opt-in because CI runners and developer machines may not always have Docker available.
@@ -99,6 +135,17 @@ Future Docker-backed browser tests should validate live `docker compose ps --for
 New code should come with tests in the same PR. If a task modifies documentation-visible behaviour, examples must be updated in README and docs before merge.
 
 A coverage failure must be fixed by adding meaningful tests first. Thresholds should only be changed when the project deliberately changes its coverage policy.
+
+## Release readiness discipline
+
+Every release candidate must pass:
+
+```bash
+npm ci
+npm run validate
+```
+
+CI also runs smoke tests and `npm pack --dry-run` to catch packaging regressions before merge.
 
 ## Fixtures
 

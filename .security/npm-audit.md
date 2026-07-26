@@ -18,7 +18,7 @@ The report recommended forced upgrades that involve major versions. The remediat
 - Raise the Node.js engine floor to `>=20.19.0`, matching the current ESLint 10 runtime requirement.
 - Add `npm audit --audit-level=moderate` to CI after dependency installation.
 
-## Current package pins
+## Current package ranges
 
 ```json
 {
@@ -29,6 +29,8 @@ The report recommended forced upgrades that involve major versions. The remediat
   "@vitest/coverage-v8": "^4.1.9"
 }
 ```
+
+The ranges intentionally target versions that are already published in npm. This avoids `ETARGET` failures while keeping semver-compatible patch updates available.
 
 ## Validation
 

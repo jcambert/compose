@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { browseComposeStacks } from '../interactive/stack-browser.js';
 import type { StackBrowserOptions } from '../interactive/stack-browser.js';
 import { inquirerPromptAdapter } from './inquirer-prompt-adapter.js';

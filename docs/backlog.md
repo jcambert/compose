@@ -59,29 +59,17 @@ The following capabilities are already implemented or release-hardened:
 - Browser filtering and sorting for large stack lists.
 - Scanner exclusions and traversal limits for large source roots.
 - Local UI rendering regression fix for invalid generated JavaScript.
+- Bundled local React UI assets served from the npm package.
+- Professional local UI layout with dashboard, sidebar, stack detail and command workflow.
+- Workspace management from the local UI: create, edit path, select current and confirmed remove.
 
-## Priority backlog
+## Completed backlog items
 
 ### P0 — Product and GUI roadmap
 
 #### User story P0.1
 
 As a maintainer, I want a documented product backlog and GUI roadmap so future work stays aligned with the original CLI-first direction.
-
-Tasks:
-
-- Document product boundaries.
-- Document the GUI development strategy.
-- Keep `compose` CLI-first.
-- Define GUI as optional local UI launched by `compose ui`.
-- Document initial GUI technology choices.
-- Move templates to non-priority/future validation.
-
-Acceptance criteria:
-
-- `docs/backlog.md` states the product scope and priority order.
-- `docs/gui-roadmap.md` states the GUI architecture, security posture and technology direction.
-- The next implementation steps are explicit and ordered.
 
 Status: completed in PR #19.
 
@@ -90,15 +78,6 @@ Status: completed in PR #19.
 #### User story P1.1
 
 As a future GUI developer, I can call reusable application services instead of duplicating CLI logic.
-
-Tasks:
-
-- Introduce `src/app` as the shared application service layer.
-- Extract scan, doctor, workspace, favorite, command preview, command execution and project mutation use cases.
-- Route CLI commands through application services.
-- Keep Commander and Inquirer dependencies in the CLI adapter.
-- Keep Docker Compose command generation in the existing `compose` module.
-- Add direct tests for application services.
 
 Acceptance criteria:
 
@@ -115,17 +94,6 @@ Status: completed in PR #20.
 
 As a developer, I can run `compose doctor` to understand whether my local installation, PATH, Docker setup and workspace configuration are usable.
 
-Tasks:
-
-- Report the resolved `compose` executable path when possible.
-- Report CLI version.
-- Report Node.js version.
-- Report Docker CLI and Docker Compose availability.
-- Report npm global prefix when useful.
-- Warn when the npm global prefix is likely missing from PATH.
-- Keep `--json` stable enough for future GUI usage.
-- Keep `--strict` behaviour for warnings-as-failures.
-
 Acceptance criteria:
 
 - `compose doctor` helps diagnose command-not-found and PATH issues on Windows.
@@ -139,15 +107,6 @@ Status: completed in PR #21.
 #### User story P1.3
 
 As a developer, I can inspect, export and restore my local `compose` configuration.
-
-Tasks:
-
-- Add `compose config path`.
-- Add `compose config export`.
-- Add `compose config import`.
-- Add `compose config reset` with confirmation.
-- Validate imported config.
-- Keep workspace/favorite/recent stack data compatible.
 
 Acceptance criteria:
 
@@ -164,16 +123,6 @@ Status: completed in PR #22.
 
 As a developer, I can start an optional local GUI from the CLI without changing how the CLI works.
 
-Tasks:
-
-- Add `compose ui`.
-- Start a local-only HTTP server.
-- Bind to `127.0.0.1` by default.
-- Use a dynamic port by default.
-- Generate a short-lived local token.
-- Add `--port`, `--workspace` and `--no-open` options.
-- Expose initial JSON endpoints for doctor, workspaces, stacks and command previews.
-
 Acceptance criteria:
 
 - `compose ui` starts a local server without requiring Docker to be running.
@@ -188,18 +137,6 @@ Status: completed in PR #23.
 #### User story P2.1
 
 As a developer, I can use an optional local web UI to inspect workspaces, stacks, services, diagnostics and safe command previews.
-
-Tasks:
-
-- Add React UI shell served by `compose ui`.
-- Add Doctor screen.
-- Add Workspaces screen.
-- Add Stacks screen.
-- Add Stack detail and service list.
-- Add command preview and execution result display.
-- Confirm destructive actions visibly.
-- Add a visible loading fallback before React mounts.
-- Fix invalid JavaScript generation regressions.
 
 Acceptance criteria:
 
@@ -218,14 +155,6 @@ Status: completed in PR #24, with rendering regression fixed in PR #27.
 
 As a developer with many stacks, I can filter, sort and navigate the terminal browser efficiently.
 
-Tasks:
-
-- Add filtering in stack selection.
-- Sort by name, path, service count and runtime status.
-- Preserve favorite stacks first regardless of sort mode.
-- Keep refresh and quit actions clear even when filters hide all stacks.
-- Improve large-directory usability.
-
 Acceptance criteria:
 
 - Large workspaces remain navigable.
@@ -239,15 +168,6 @@ Status: completed in PR #25.
 #### User story P2.3
 
 As a developer, I can scan large source folders without wasting time in noisy directories.
-
-Tasks:
-
-- Exclude common noisy folders by default: `.git`, `node_modules`, `bin`, `obj`, `dist`, build outputs, IDE folders and package caches.
-- Make exclusions case-insensitive.
-- Skip symbolic links during traversal.
-- Add traversal limits for visited directories and inspected entries.
-- Allow extra CLI exclusions through `--exclude`.
-- Keep scan output stable for CLI and GUI usage.
 
 Acceptance criteria:
 
@@ -263,21 +183,13 @@ Status: completed in PR #26.
 
 As a maintainer, I can prepare a clean v0.2.0 release from the stabilized UI, browser and scanner milestones.
 
-Tasks:
-
-- Align backlog and GUI roadmap with completed PR #24 to PR #27.
-- Document the v0.2.0 release scope.
-- Document the local validation checklist.
-- Document known limitations before publishing.
-- Keep the next release PR separate from the documentation alignment PR.
-
 Acceptance criteria:
 
 - `docs/release-readiness.md` defines what must be checked before v0.2.0.
-- The next PR order separates documentation alignment, version bump and GUI asset bundling.
-- Known limitations are explicit instead of hidden in the roadmap.
+- The release scope and known limitations are explicit.
+- Release notes are prepared separately from implementation PRs.
 
-Status: in progress through PR #28.
+Status: completed in PR #28 and PR #29.
 
 ### P2 — GUI asset pipeline
 
@@ -285,20 +197,59 @@ Status: in progress through PR #28.
 
 As a maintainer, I can package the React GUI as local bundled assets when the MVP API and UX contract are stable.
 
-Tasks:
-
-- Add a dedicated GUI build pipeline.
-- Package browser assets under `dist` for npm distribution.
-- Keep the API contract compatible with the MVP.
-- Keep CLI builds and smoke tests fast.
-
 Acceptance criteria:
 
 - `compose ui` can run the GUI without relying on browser ESM imports.
 - The package still installs through npm as a CLI-first tool.
 - The GUI build does not rewrite the command model.
 
-Candidate PR: `build: bundle local GUI assets`.
+Status: completed in PR #30.
+
+### P2 — Professional local UI layout
+
+#### User story P2.6
+
+As a developer, I can use a more professional local UI that clearly separates dashboard, workspaces, stacks, diagnostics and command execution.
+
+Acceptance criteria:
+
+- The GUI is easier to understand on first launch.
+- The CLI remains fully usable without the GUI.
+- The local API contract remains compatible.
+
+Status: completed in PR #31.
+
+### P2 — Workspace management from local UI
+
+#### User story P2.7
+
+As a developer, I can manage saved source roots without leaving the local UI.
+
+Acceptance criteria:
+
+- Workspace mutations use the same local user config as the CLI.
+- Stacks refresh after workspace changes.
+- Command state is reset after switching workspace.
+- Mutations remain token-protected and local-only.
+
+Status: completed in PR #32.
+
+### P2 — Workspace management UX polish
+
+#### User story P2.8
+
+As a developer, I can understand and safely manage workspaces from a polished UI.
+
+Acceptance criteria:
+
+- Current workspace is visually obvious.
+- Remove actions require a second click.
+- The UI supports updating an existing workspace path.
+- The local API and CLI behaviour remain compatible.
+
+Status: completed in PR #33.
+
+## Priority backlog
 
 ### P3 — GUI streaming
 
@@ -363,11 +314,9 @@ Acceptance criteria for future reconsideration:
 ## Recommended next PR order
 
 ```text
-#28 docs: align backlog and release readiness after UI/scanner fixes
-#29 release: prepare v0.2.0
-#30 build: bundle local GUI assets
-#31 feat: improve Docker Compose error reporting
-#32 feat: add GUI logs and runtime streaming
+#34 feat: add GUI logs and runtime streaming
+#35 feat: improve Docker Compose error reporting
+#36 release: prepare next post-0.2.0 version
 ```
 
 ## Definition of done

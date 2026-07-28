@@ -1,0 +1,215 @@
+# GUI Roadmap
+
+## Product stance
+
+`compose` remains a command-line product first.
+
+The graphical interface is an optional local view launched by the CLI. It must not become a second product with duplicated business rules, duplicated Docker Compose command generation, or a separate configuration model.
+
+Target invocation:
+
+```bash
+compose ui
+compose ui --workspace dev
+compose ui --port 0
+compose ui --no-open
+```
+
+The CLI stays fully usable without the GUI:
+
+```bash
+compose scan
+compose browse
+compose doctor
+compose up --project ./infra --detach
+compose logs --project ./infra api --follow
+```
+
+## Non-goals for the first GUI iterations
+
+The first GUI iterations must not introduce:
+
+- Electron packaging.
+- Tauri packaging.
+- A desktop auto-update flow.
+- A remote multi-user server.
+- A template catalog.
+- A second command model for the GUI.
+- Business rules that only exist in the UI layer.
+
+Desktop packaging can be reconsidered after the local browser-based GUI proves useful.
+
+## Technology direction
+
+The preferred implementation path is:
+
+- Core and application services: TypeScript running in Node.js.
+- UI: React + Vite + TypeScript.
+- Local UI server: Fastify, or a minimal Node HTTP server if the first step only needs static files and a few JSON endpoints.
+- Streaming: Server-Sent Events first for logs and runtime status updates.
+- WebSocket: only later, if an interactive terminal-like experience is required.
+
+The GUI is served by the CLI from `127.0.0.1` only. It should choose a free dynamic port by default and protect the session with a short-lived local token.
+
+## Architectural rule
+
+The GUI must reuse the same core primitives as the CLI:
+
+- Compose discovery.
+- Runtime status reading.
+- Workspace and favorite storage.
+- Doctor diagnostics.
+- Guided command descriptors.
+- Compose command preview.
+- Compose command execution.
+
+The CLI and GUI must both resolve actions into the same typed command intent model before execution. The GUI must never parse terminal help output or rebuild Docker Compose commands independently.
+
+## Planned module direction
+
+The current CLI already keeps scanning, command building, guided descriptors, interactive browsing and workspace persistence separate from terminal rendering. The next preparation step is to formalize a reusable application layer.
+
+Target direction:
+
+```text
+src/
+  app/           reusable application services shared by CLI and GUI
+  cli/           terminal adapter and command registration
+  compose/       Docker Compose command model, builder and executor
+  doctor/        diagnostics model and runner
+  guided/        UI-neutral command descriptors
+  interactive/   stack/service browsing workflow
+  scanner/       Compose discovery
+  ui-server/     local HTTP server for compose ui
+  workspace/     local workspaces, favorites and recents
+  yaml/          Compose YAML parser/writer
+```
+
+The `app` and `ui-server` modules should be introduced incrementally, not through a large rewrite.
+
+## Delivery plan
+
+### Step 1 — Formalize GUI roadmap and product backlog
+
+Document the GUI direction, product boundaries, technology choice and backlog order.
+
+Expected output:
+
+- `docs/gui-roadmap.md`
+- updated `docs/backlog.md`
+
+### Step 2 — Formalize reusable application services
+
+Extract and stabilize application services that can be called by both the CLI and the future GUI.
+
+Candidate services:
+
+```text
+src/app/scan-compose-projects.ts
+src/app/read-runtime-status.ts
+src/app/run-doctor.ts
+src/app/manage-workspaces.ts
+src/app/manage-favorites.ts
+src/app/preview-compose-command.ts
+src/app/execute-compose-command.ts
+```
+
+Acceptance criteria:
+
+- CLI commands delegate to reusable services.
+- Application services do not depend on Commander or Inquirer.
+- Tests cover application services directly.
+- Existing CLI behaviour remains unchanged.
+
+### Step 3 — Add `compose ui` with a minimal local server
+
+Add a CLI command that starts a local-only HTTP server and exposes the first JSON endpoints.
+
+Initial command shape:
+
+```bash
+compose ui
+compose ui --port 0
+compose ui --workspace dev
+compose ui --no-open
+```
+
+Initial endpoints:
+
+```text
+GET  /api/doctor
+GET  /api/workspaces
+GET  /api/stacks
+GET  /api/stacks/:id/runtime
+POST /api/commands/preview
+POST /api/commands/execute
+```
+
+Acceptance criteria:
+
+- The server binds to `127.0.0.1` by default.
+- The default port can be dynamic.
+- A local token protects API access.
+- Destructive actions require explicit confirmation data in the request.
+- The server can be tested without launching a browser.
+
+### Step 4 — Add the React GUI MVP
+
+Add a small UI served by `compose ui`.
+
+MVP screens:
+
+- Doctor.
+- Workspaces.
+- Stack list.
+- Stack detail.
+- Service list.
+- Command preview.
+- Command execution result.
+
+MVP constraints:
+
+- The UI must show the generated `docker compose` command before executing meaningful operations.
+- Destructive operations such as `down`, `kill` and `rm` require visible confirmation.
+- The UI uses existing command descriptors and command intent models.
+- The UI remains optional and is not required for CLI usage.
+
+### Step 5 — Add streaming for logs and runtime updates
+
+Use Server-Sent Events for long-running output and status refreshes.
+
+Candidate endpoints:
+
+```text
+GET /api/events/runtime
+GET /api/logs/stream
+```
+
+WebSocket support remains out of scope until a concrete bidirectional use case exists.
+
+## Security and safety requirements
+
+The local GUI must follow these rules:
+
+- Bind to `127.0.0.1` unless a future explicit remote mode is designed.
+- Use a short-lived local token.
+- Avoid broad filesystem APIs exposed to the browser.
+- Keep Docker Compose command execution explicit and visible.
+- Require confirmations for destructive actions.
+- Support dry-run/preview flows wherever command execution is available.
+
+## Decision rules for future GUI work
+
+A GUI task is allowed when it improves one of these goals:
+
+- Makes existing CLI capabilities easier to inspect or operate.
+- Reuses application services without duplicating logic.
+- Improves visibility of Docker Compose command previews, runtime status or diagnostics.
+- Keeps terminal workflows fully supported.
+
+A GUI task should be rejected or postponed when it requires:
+
+- A separate command model.
+- A separate config format.
+- Desktop packaging before the local server MVP proves valuable.
+- Remote server behaviour without an explicit security design.

@@ -6,10 +6,8 @@ import type { AddressInfo } from 'node:net';
 import { platform as getPlatform } from 'node:os';
 import { URL } from 'node:url';
 import { execa } from 'execa';
-import type { ComposeSubCommand } from '../compose/compose-command.js';
-import type { BuiltComposeCommand } from '../compose/compose-command.js';
+import type { BuiltComposeCommand, ComposeSubCommand } from '../compose/compose-command.js';
 import type { ProcessRunner } from '../compose/compose-executor.js';
-import type { ComposeCommandOptions } from '../compose/compose-options.js';
 import type { StackRuntimeStatus } from '../interactive/stack-runtime-status.js';
 import { readStackRuntimeStatus } from '../interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../scanner/discovered-project.js';
@@ -52,14 +50,7 @@ export type LocalUiServerDependencies = {
   executeCommand?: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
 };
 
-type LocalUiRequestContext = {
-  host: '127.0.0.1';
-  token: string;
-  options: LocalUiServerOptions;
-  dependencies: Required<LocalUiRuntimeDependencies>;
-};
-
-type LocalUiRuntimeDependencies = {
+type RuntimeDependencies = {
   openBrowser: (url: string) => Promise<void> | void;
   runDoctor: (options?: DoctorOptions) => Promise<DoctorReport>;
   listWorkspaces: () => Promise<WorkspaceListResult>;
@@ -67,6 +58,12 @@ type LocalUiRuntimeDependencies = {
   readRuntimeStatus: (project: DiscoveredComposeProject) => Promise<StackRuntimeStatus>;
   previewCommand: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
   executeCommand: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
+};
+
+type RequestContext = {
+  token: string;
+  options: LocalUiServerOptions;
+  dependencies: RuntimeDependencies;
 };
 
 type StackScanContext = {
@@ -83,14 +80,9 @@ type CommandPayload = {
 
 type JsonObject = Record<string, unknown>;
 
-type ExecaCaptureResult = {
-  exitCode?: number | null;
-  stdout?: unknown;
-  stderr?: unknown;
-};
-
 const localUiHost = '127.0.0.1' as const;
 const maximumRequestBodyBytes = 1024 * 1024;
+const destructiveCommands = new Set<ComposeSubCommand>(['down', 'kill', 'rm']);
 const composeSubCommands = new Set<ComposeSubCommand>([
   'up',
   'down',
@@ -118,18 +110,17 @@ const composeSubCommands = new Set<ComposeSubCommand>([
   'version',
   'watch',
 ]);
-const destructiveCommands = new Set<ComposeSubCommand>(['down', 'kill', 'rm']);
 
 const captureProcessRunner: ProcessRunner = async (binary, args, options) => {
   const result = await execa(binary, args, {
     cwd: options.cwd,
     reject: false,
-  }) as ExecaCaptureResult;
+  });
 
   return {
     exitCode: result.exitCode ?? 0,
-    stdout: typeof result.stdout === 'string' ? result.stdout : '',
-    stderr: typeof result.stderr === 'string' ? result.stderr : '',
+    stdout: result.stdout,
+    stderr: result.stderr,
   };
 };
 
@@ -139,8 +130,7 @@ export async function startLocalUiServer(
 ): Promise<LocalUiServer> {
   const token = options.token ?? randomBytes(24).toString('hex');
   const runtimeDependencies = createRuntimeDependencies(dependencies);
-  const context: LocalUiRequestContext = {
-    host: localUiHost,
+  const context: RequestContext = {
     token,
     options,
     dependencies: runtimeDependencies,
@@ -176,18 +166,9 @@ export async function startLocalUiServer(
   };
 }
 
-async function handleRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  context: LocalUiRequestContext,
-): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, context: RequestContext): Promise<void> {
   try {
-    if (request.url === undefined) {
-      sendError(response, 400, 'invalid-request', 'Request URL is missing.');
-      return;
-    }
-
-    const url = new URL(request.url, `http://${context.host}`);
+    const url = new URL(request.url ?? '/', `http://${localUiHost}`);
 
     if (!isAuthorized(request, url, context.token)) {
       sendError(response, 401, 'unauthorized', 'Invalid or missing local UI token.');
@@ -200,10 +181,7 @@ async function handleRequest(
     }
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(response, 200, {
-        ok: true,
-        host: context.host,
-      });
+      sendJson(response, 200, { ok: true, host: localUiHost });
       return;
     }
 
@@ -220,7 +198,7 @@ async function handleRequest(
 
     if (request.method === 'GET' && url.pathname === '/api/stacks') {
       const scanContext = await resolveStackScanContext(url, context);
-      const stacks = await context.dependencies.scanProjects({ root: scanContext.root, ...(scanContext.maxDepth === undefined ? {} : { maxDepth: scanContext.maxDepth }) });
+      const stacks = await scanProjects(scanContext, context.dependencies);
       sendJson(response, 200, {
         root: scanContext.root,
         ...(scanContext.workspaceName === undefined ? {} : { workspaceName: scanContext.workspaceName }),
@@ -233,7 +211,7 @@ async function handleRequest(
 
     if (request.method === 'GET' && runtimeProjectId !== undefined) {
       const scanContext = await resolveStackScanContext(url, context);
-      const stacks = await context.dependencies.scanProjects({ root: scanContext.root, ...(scanContext.maxDepth === undefined ? {} : { maxDepth: scanContext.maxDepth }) });
+      const stacks = await scanProjects(scanContext, context.dependencies);
       const project = findProject(stacks, runtimeProjectId);
 
       if (project === undefined) {
@@ -279,7 +257,7 @@ async function handleRequest(
   }
 }
 
-function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Required<LocalUiRuntimeDependencies> {
+function createRuntimeDependencies(dependencies: LocalUiServerDependencies): RuntimeDependencies {
   return {
     openBrowser: dependencies.openBrowser ?? openLocalBrowser,
     runDoctor: dependencies.runDoctor ?? runDoctor,
@@ -291,15 +269,12 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Req
   };
 }
 
-async function resolveStackScanContext(url: URL, context: LocalUiRequestContext): Promise<StackScanContext> {
+async function resolveStackScanContext(url: URL, context: RequestContext): Promise<StackScanContext> {
   const root = readOptionalStringQuery(url, 'root');
   const maxDepth = readOptionalIntegerQuery(url, 'maxDepth');
 
   if (root !== undefined) {
-    return {
-      root,
-      ...(maxDepth === undefined ? {} : { maxDepth }),
-    };
+    return { root, ...(maxDepth === undefined ? {} : { maxDepth }) };
   }
 
   const workspaceName = readOptionalStringQuery(url, 'workspace') ?? context.options.workspaceName;
@@ -331,10 +306,14 @@ async function resolveStackScanContext(url: URL, context: LocalUiRequestContext)
     }
   }
 
-  return {
-    root: '.',
-    ...(maxDepth === undefined ? {} : { maxDepth }),
-  };
+  return { root: '.', ...(maxDepth === undefined ? {} : { maxDepth }) };
+}
+
+async function scanProjects(scanContext: StackScanContext, dependencies: RuntimeDependencies): Promise<DiscoveredComposeProject[]> {
+  return dependencies.scanProjects({
+    root: scanContext.root,
+    ...(scanContext.maxDepth === undefined ? {} : { maxDepth: scanContext.maxDepth }),
+  });
 }
 
 function parseCommandPayload(value: unknown): CommandPayload {
@@ -344,11 +323,9 @@ function parseCommandPayload(value: unknown): CommandPayload {
 
   const command = readComposeSubCommand(value.command);
   const services = readOptionalStringArray(value.services) ?? [];
-  const options = parseComposeApplicationOptions(value.options);
+  const options = readOptions(value.options);
   const passthroughArgs = readOptionalStringArray(value.passthroughArgs);
   const composeFilePath = readOptionalString(value.composeFilePath);
-  const confirmed = value.confirmed === true;
-  const destructiveConfirmed = value.destructiveConfirmed === true;
   const input: ComposeApplicationCommandInput = {
     command,
     services,
@@ -363,12 +340,12 @@ function parseCommandPayload(value: unknown): CommandPayload {
 
   return {
     input,
-    confirmed,
-    destructiveConfirmed,
+    confirmed: value.confirmed === true,
+    destructiveConfirmed: value.destructiveConfirmed === true,
   };
 }
 
-function parseComposeApplicationOptions(value: unknown): ComposeApplicationCommandOptions {
+function readOptions(value: unknown): ComposeApplicationCommandOptions {
   if (value === undefined) {
     return {};
   }
@@ -377,89 +354,7 @@ function parseComposeApplicationOptions(value: unknown): ComposeApplicationComma
     throw new LocalUiHttpError(400, 'invalid-options', 'Command options must be a JSON object when provided.');
   }
 
-  const options: ComposeApplicationCommandOptions = {};
-
-  copyStringOption(value, options, 'project');
-  copyStringOption(value, options, 'file');
-  copyStringOption(value, options, 'tail');
-  copyStringOption(value, options, 'timeout');
-  copyStringOption(value, options, 'signal');
-  copyStringOption(value, options, 'format');
-  copyStringOption(value, options, 'user');
-  copyStringOption(value, options, 'workdir');
-  copyStringOption(value, options, 'projectName');
-  copyBooleanOption(value, options, 'detach');
-  copyBooleanOption(value, options, 'removeOrphans');
-  copyBooleanOption(value, options, 'volumes');
-  copyBooleanOption(value, options, 'build');
-  copyBooleanOption(value, options, 'noBuild');
-  copyBooleanOption(value, options, 'noCache');
-  copyBooleanOption(value, options, 'pull');
-  copyBooleanOption(value, options, 'follow');
-  copyBooleanOption(value, options, 'rm');
-  copyBooleanOption(value, options, 'force');
-  copyBooleanOption(value, options, 'stop');
-  copyBooleanOption(value, options, 'all');
-  copyBooleanOption(value, options, 'quiet');
-  copyBooleanOption(value, options, 'json');
-  copyBooleanOption(value, options, 'noInterpolate');
-  copyBooleanOption(value, options, 'servicesOnly');
-  copyBooleanOption(value, options, 'volumesOnly');
-  copyBooleanOption(value, options, 'profilesOnly');
-  copyBooleanOption(value, options, 'short');
-  copyBooleanOption(value, options, 'noUp');
-  copyBooleanOption(value, options, 'dryRun');
-  copyBooleanOption(value, options, 'noAnsi');
-  copyStringArrayOption(value, options, 'scale');
-  copyStringArrayOption(value, options, 'env');
-  copyStringArrayOption(value, options, 'profile');
-
-  return options;
-}
-
-function copyStringOption<TOptions extends ComposeCommandOptions & { project?: string; file?: string }>(
-  source: JsonObject,
-  target: TOptions,
-  key: keyof TOptions & string,
-): void {
-  const value = source[key];
-
-  if (value !== undefined) {
-    if (typeof value !== 'string') {
-      throw new LocalUiHttpError(400, 'invalid-options', `Option ${key} must be a string.`);
-    }
-
-    target[key] = value as TOptions[keyof TOptions & string];
-  }
-}
-
-function copyBooleanOption<TOptions extends ComposeCommandOptions & { project?: string; file?: string }>(
-  source: JsonObject,
-  target: TOptions,
-  key: keyof TOptions & string,
-): void {
-  const value = source[key];
-
-  if (value !== undefined) {
-    if (typeof value !== 'boolean') {
-      throw new LocalUiHttpError(400, 'invalid-options', `Option ${key} must be a boolean.`);
-    }
-
-    target[key] = value as TOptions[keyof TOptions & string];
-  }
-}
-
-function copyStringArrayOption<TOptions extends ComposeCommandOptions & { project?: string; file?: string }>(
-  source: JsonObject,
-  target: TOptions,
-  key: keyof TOptions & string,
-): void {
-  const value = source[key];
-
-  if (value !== undefined) {
-    const stringArray = readStringArray(value, `Option ${key}`);
-    target[key] = stringArray as TOptions[keyof TOptions & string];
-  }
+  return value as ComposeApplicationCommandOptions;
 }
 
 async function readRequestJson(request: IncomingMessage): Promise<unknown> {
@@ -499,16 +394,16 @@ function readComposeSubCommand(value: unknown): ComposeSubCommand {
   return value as ComposeSubCommand;
 }
 
-function readStringArray(value: unknown, label: string): string[] {
+function readOptionalStringArray(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
   if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
-    throw new LocalUiHttpError(400, 'invalid-string-array', `${label} must be an array of strings.`);
+    throw new LocalUiHttpError(400, 'invalid-string-array', 'Expected an array of strings.');
   }
 
   return value;
-}
-
-function readOptionalStringArray(value: unknown): string[] | undefined {
-  return value === undefined ? undefined : readStringArray(value, 'Value');
 }
 
 function readOptionalString(value: unknown): string | undefined {
@@ -581,8 +476,7 @@ function isAuthorized(request: IncomingMessage, url: URL, token: string): boolea
     return true;
   }
 
-  const authorization = request.headers.authorization;
-  return authorization === `Bearer ${token}`;
+  return request.headers.authorization === `Bearer ${token}`;
 }
 
 function sendHtml(response: ServerResponse, content: string): void {
@@ -649,7 +543,7 @@ POST /api/commands/execute</pre>
   <script>
     const token = ${encodedToken};
     async function load() {
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { Authorization: 'Bearer ' + token };
       const [health, doctor, workspaces, stacks] = await Promise.all([
         fetch('/api/health', { headers }).then(response => response.json()),
         fetch('/api/doctor?skipDocker=true', { headers }).then(response => response.json()),

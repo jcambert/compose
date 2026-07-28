@@ -1,12 +1,14 @@
 import { execa } from 'execa';
 import { buildComposeCommand } from './compose-command-builder.js';
 import type { ComposeExecutionRequest } from './compose-command.js';
+import { createComposeExecutionDiagnostic, type ComposeExecutionDiagnostic } from './compose-error-reporting.js';
 
 export type ComposeExecutionResult = {
   command: string;
   exitCode: number;
   stdout: string;
   stderr: string;
+  diagnostic?: ComposeExecutionDiagnostic;
 };
 
 export type ProcessRunner = (
@@ -51,11 +53,24 @@ export async function executeComposeCommand(
     };
   }
 
-  const result = await runner(builtCommand.binary, builtCommand.args, { cwd: builtCommand.cwd });
+  const result = await runProcessSafely(runner, builtCommand.binary, builtCommand.args, { cwd: builtCommand.cwd });
+  const diagnostic = result.exitCode === 0
+    ? undefined
+    : createComposeExecutionDiagnostic({
+      request,
+      builtCommand,
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      ...(result.error === undefined ? {} : { error: result.error }),
+    });
 
   return {
     command: builtCommand.displayCommand,
-    ...result,
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    ...(diagnostic === undefined ? {} : { diagnostic }),
   };
 }
 
@@ -78,4 +93,44 @@ export function createExecaProcessRunner(execaRunner: ExecaLike): ProcessRunner 
       stderr: typeof result.stderr === 'string' ? result.stderr : '',
     };
   };
+}
+
+async function runProcessSafely(
+  runner: ProcessRunner,
+  binary: string,
+  args: string[],
+  options: { cwd: string },
+): Promise<{ exitCode: number; stdout: string; stderr: string; error?: unknown }> {
+  try {
+    return await runner(binary, args, options);
+  } catch (error) {
+    return {
+      exitCode: readNumericProperty(error, 'exitCode') ?? (readStringProperty(error, 'code') === 'ENOENT' ? 127 : 1),
+      stdout: readStringProperty(error, 'stdout') ?? '',
+      stderr: readStringProperty(error, 'stderr') ?? readStringProperty(error, 'message') ?? '',
+      error,
+    };
+  }
+}
+
+function readNumericProperty(value: unknown, property: string): number | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const candidate = value[property];
+  return typeof candidate === 'number' ? candidate : undefined;
+}
+
+function readStringProperty(value: unknown, property: string): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const candidate = value[property];
+  return typeof candidate === 'string' ? candidate : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

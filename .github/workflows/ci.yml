@@ -12,9 +12,168 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  align-pr33-docs:
+    if: ${{ github.ref == 'refs/heads/fix/polish-workspace-management-ui' && !contains(github.event.head_commit.message, 'docs: align PR 33 documentation') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Align documentation
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, path: str) -> str:
+              if old not in text:
+                  raise SystemExit(f'Missing expected block in {path}: {old!r}')
+              return text.replace(old, new, 1)
+
+          readme_path = Path('README.md')
+          readme = readme_path.read_text()
+          readme = replace_once(
+              readme,
+              '- Start an optional local browser UI with `compose ui`.',
+              '- Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks and preview commands.',
+              'README.md',
+          )
+          readme = replace_once(
+              readme,
+              'The local UI:\n\n- binds to `127.0.0.1`\n- uses a dynamic free port by default\n- protects the browser session and API with a short-lived token\n- serves bundled React assets locally from `dist/ui`\n- shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews\n- requires explicit confirmation before command execution\n- requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`\n',
+              'The local UI:\n\n- binds to `127.0.0.1`\n- uses a dynamic free port by default\n- protects the browser session and API with a short-lived token\n- serves bundled React assets locally from `dist/ui`\n- shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews\n- manages saved workspaces from the browser: create, edit path, select current and remove with confirmation\n- keeps the current workspace visually distinct and hides destructive removal behind an explicit confirmation\n- requires explicit confirmation before command execution\n- requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`\n',
+              'README.md',
+          )
+          readme = replace_once(
+              readme,
+              'The browser UI is built by `npm run build` and packaged with the npm CLI. The browser no longer needs to download React from an external CDN at runtime. In a source checkout where the UI assets are missing, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.\n\nSee [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.',
+              'The browser UI is built by `npm run build` and packaged with the npm CLI. The browser no longer needs to download React from an external CDN at runtime. In a source checkout where the UI assets are missing, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.\n\nWorkspace management in the UI uses the same local user config as the CLI. Saving an existing workspace name updates its path, switching workspace refreshes the stack scan, and removing a workspace requires a visible confirmation step.\n\nSee [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.',
+              'README.md',
+          )
+          readme_path.write_text(readme)
+
+          roadmap_path = Path('docs/gui-roadmap.md')
+          roadmap = roadmap_path.read_text()
+          roadmap = replace_once(
+              roadmap,
+              'The current UI is organized as a professional local admin console with Dashboard, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.',
+              'The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.',
+              'docs/gui-roadmap.md',
+          )
+          roadmap = replace_once(
+              roadmap,
+              'Status: completed in PR #31.\n\n## Next delivery plan\n\n### Step 10 — Add streaming for logs and runtime updates',
+              'Status: completed in PR #31.\n\n### Step 10 — Manage workspaces from the local UI\n\nPromote workspace configuration from read-only status to a first-class browser workflow.\n\nDelivered behaviours:\n\n- Dedicated Workspaces navigation entry.\n- Create a saved workspace from the browser.\n- Select the current workspace from the browser.\n- Remove a saved workspace from the browser through token-protected local endpoints.\n- Refresh stack data after workspace changes.\n- Keep command state safe after workspace changes.\n\nStatus: completed in PR #32.\n\n### Step 11 — Polish workspace management UX\n\nRefine the workspace management screen after real UI feedback.\n\nDelivered behaviours:\n\n- More compact add/edit form.\n- Edit mode for updating an existing workspace path.\n- Readable monospace path chips with overflow handling.\n- Clear current workspace state instead of a disabled Use button.\n- Less aggressive remove action.\n- Explicit remove confirmation before deletion.\n- Success and error feedback retained in the workspace panel.\n\nStatus: completed in PR #33.\n\n## Next delivery plan\n\n### Step 12 — Add streaming for logs and runtime updates',
+              'docs/gui-roadmap.md',
+          )
+          roadmap = replace_once(roadmap, '### Step 11 — Improve Docker Compose error reporting', '### Step 13 — Improve Docker Compose error reporting', 'docs/gui-roadmap.md')
+          roadmap_path.write_text(roadmap)
+
+          backlog_path = Path('docs/backlog.md')
+          backlog = backlog_path.read_text()
+          backlog = replace_once(
+              backlog,
+              '- Local UI rendering regression fix for invalid generated JavaScript.\n',
+              '- Local UI rendering regression fix for invalid generated JavaScript.\n- Bundled local React UI assets served from the npm package.\n- Professional local UI layout with dashboard, sidebar, stack detail and command workflow.\n- Workspace management from the local UI: create, edit path, select current and confirmed remove.\n',
+              'docs/backlog.md',
+          )
+          backlog = replace_once(backlog, 'Status: in progress through PR #28.', 'Status: completed in PR #28.', 'docs/backlog.md')
+          backlog = replace_once(backlog, 'Candidate PR: `build: bundle local GUI assets`.', 'Status: completed in PR #30.', 'docs/backlog.md')
+          insert_after = 'Status: completed in PR #30.\n\n'
+          new_section = '''### P2 — Professional local UI layout
+
+#### User story P2.6
+
+As a developer, I can use a more professional local UI that clearly separates dashboard, workspaces, stacks, diagnostics and command execution.
+
+Tasks:
+
+- Add sidebar navigation.
+- Add dashboard summary cards.
+- Improve stack list and stack detail readability.
+- Keep command execution as preview, confirm and execute.
+- Keep destructive command confirmation explicit.
+
+Acceptance criteria:
+
+- The GUI is easier to understand on first launch.
+- The CLI remains fully usable without the GUI.
+- The local API contract remains compatible.
+
+Status: completed in PR #31.
+
+### P2 — Workspace management from local UI
+
+#### User story P2.7
+
+As a developer, I can manage saved source roots without leaving the local UI.
+
+Tasks:
+
+- Add a Workspaces screen.
+- Create a saved workspace.
+- Select the current workspace.
+- Remove a saved workspace.
+- Refresh stack data after workspace changes.
+- Keep mutations token-protected and local-only.
+
+Acceptance criteria:
+
+- Workspace mutations use the same local user config as the CLI.
+- Stacks refresh after workspace changes.
+- Command state is reset after switching workspace.
+
+Status: completed in PR #32.
+
+### P2 — Workspace management UX polish
+
+#### User story P2.8
+
+As a developer, I can understand and safely manage workspaces from a polished UI.
+
+Tasks:
+
+- Replace the raw create form with a compact add/edit form.
+- Add edit mode for updating workspace paths.
+- Show paths in readable monospace chips with overflow handling.
+- Replace the disabled current-workspace Use button with a clear active state.
+- Hide destructive removal behind an explicit confirmation step.
+
+Acceptance criteria:
+
+- Current workspace is visually obvious.
+- Remove actions require a second click.
+- The UI supports updating an existing workspace path.
+- The local API and CLI behaviour remain compatible.
+
+Status: completed in PR #33.
+
+'''
+          if new_section not in backlog:
+              backlog = replace_once(backlog, insert_after, insert_after + new_section, 'docs/backlog.md')
+          backlog = replace_once(
+              backlog,
+              '## Recommended next PR order\n\n```text\n#28 docs: align backlog and release readiness after UI/scanner fixes\n#29 release: prepare v0.2.0\n#30 build: bundle local GUI assets\n#31 feat: improve Docker Compose error reporting\n#32 feat: add GUI logs and runtime streaming\n```',
+              '## Recommended next PR order\n\n```text\n#34 feat: add GUI logs and runtime streaming\n#35 feat: improve Docker Compose error reporting\n#36 release: prepare next post-0.2.0 version\n```',
+              'docs/backlog.md',
+          )
+          backlog_path.write_text(backlog)
+          PY
+
+      - name: Commit docs
+        run: |
+          if git diff --quiet; then
+            echo "No documentation changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/gui-roadmap.md docs/backlog.md
+          git commit -m "docs: align PR 33 documentation"
+          git push
+
   validate:
     name: Validate
     runs-on: ubuntu-latest

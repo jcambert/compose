@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { formatDoctorReport, runDoctor } from '../doctor/doctor.js';
+import { formatDoctorReport, runDoctor } from '../app/doctor-service.js';
 
 export function registerDoctorCommand(program: Command): void {
   program

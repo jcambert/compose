@@ -6,13 +6,13 @@ This document tracks what must be true before publishing the next npm release.
 
 Candidate version: `v0.2.0`.
 
-Current package version before the release PR: `0.1.2`.
+Package version in this release branch: `0.2.0`.
 
-The release PR must update version metadata separately from this documentation alignment PR.
+This release preparation PR updates package metadata, changelog and release notes. It does not tag or publish the npm package automatically.
 
 ## Release scope
 
-The next release should make the post-`0.1.2` work available from npm.
+This release makes the post-`0.1.2` work available from npm.
 
 Included milestones:
 
@@ -26,15 +26,17 @@ Included milestones:
 - PR #26 — scanner exclusions and large-directory guard rails.
 - PR #27 — local UI rendering fix for invalid generated JavaScript.
 - PR #28 — release readiness and roadmap alignment.
+- PR #29 — `v0.2.0` release metadata, changelog and release notes.
 
 ## Release blockers
 
-Before publishing, the release PR must confirm:
+Before publishing, confirm:
 
-- `package.json` version is bumped consistently.
-- `package-lock.json` is synchronized with the new package version.
-- `CHANGELOG.md` has a clear `v0.2.0` section.
-- README examples are not misleading for the new commands.
+- `package.json` version is `0.2.0`.
+- `package-lock.json` root package version is synchronized with `0.2.0`.
+- `CHANGELOG.md` has a clear `0.2.0` section.
+- README examples mention the new `compose ui`, browser filtering and scanner guard rail commands.
+- `docs/releases/v0.2.0.md` exists and can be used as the GitHub release body.
 - CI is green on the release PR.
 - `npm pack --dry-run` contains `dist`, `README.md`, `CHANGELOG.md` and `docs`.
 - The release workflow still uses npm Trusted Publishing.
@@ -42,7 +44,7 @@ Before publishing, the release PR must confirm:
 
 ## Local validation checklist
 
-Run from a clean local checkout of `main` or the release branch:
+Run from a clean local checkout of `main` after the release PR is merged, or directly from the release branch before merge:
 
 ```bash
 npm ci
@@ -56,6 +58,7 @@ npm run build
 node ./dist/cli/index.js --version
 node ./dist/cli/index.js doctor --skip-docker
 node ./dist/cli/index.js scan . --max-depth 4 --json
+node ./dist/cli/index.js browse --filter api --sort runtime --dry-run
 node ./dist/cli/index.js ui --skip-docker --no-open
 ```
 
@@ -93,22 +96,25 @@ Open the generated tokenized URL and verify:
 - Execution remains disabled until explicit confirmation.
 - `down`, `kill` and `rm` require destructive confirmation.
 
-## Known limitation for v0.2.0 decision
+## Known limitation for v0.2.0
 
 The current React MVP still uses browser ESM imports for React. In environments where that external source is blocked by proxy, TLS inspection or offline usage, the React app can fail to mount.
 
-This limitation is now documented and partially mitigated by a visible loading fallback. The durable fix is the follow-up GUI asset pipeline:
+This limitation is documented and partially mitigated by a visible loading fallback. The durable fix is the follow-up GUI asset pipeline:
 
 ```text
 build: bundle local GUI assets
 ```
 
-Release decision:
+Release preparation decision for this PR:
 
-- Option A: publish `v0.2.0` with the limitation documented, then immediately deliver bundled assets.
-- Option B: treat bundled assets as a release blocker and publish `v0.2.0` only after the asset pipeline PR.
+- Prepare `v0.2.0` with the limitation documented.
+- Keep npm publication manual.
+- Prefer completing bundled assets before broad non-technical user testing.
 
-The preferred product-quality path is Option B when the release is intended for broader user testing.
+## GitHub release body
+
+Use `docs/releases/v0.2.0.md` as the release body when creating the GitHub release or running the release workflow.
 
 ## After publish
 
@@ -119,6 +125,7 @@ npm install -g @jc90100/compose@0.2.0
 compose --version
 compose doctor --skip-docker
 compose scan . --max-depth 4
+compose browse --filter api --sort runtime
 ```
 
 If the release workflow is run with `publish=true`, the repository's post-publication validation should already perform the exact-version install and basic CLI checks.

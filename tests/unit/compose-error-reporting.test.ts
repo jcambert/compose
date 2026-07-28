@@ -44,8 +44,8 @@ describe('compose execution diagnostics', () => {
 
   it.each([
     `stat ${composeFilePath}: no such file or directory`,
-    'no configuration file provided: not found',
-    'can\'t find a suitable configuration file in this directory or any parent',
+    'compose: no configuration file provided: not found',
+    'compose: can\'t find a suitable configuration file in this directory or any parent',
     `cannot find the file specified: ${composeFilePath}`,
     `the system cannot find the file specified: ${composeFilePath}`,
   ])('classifies missing compose file diagnostics %#', (stderr) => {

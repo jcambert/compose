@@ -8,6 +8,17 @@ The project follows a pragmatic semver policy:
 - minor releases add compatible user-facing commands or workflows
 - major releases introduce breaking command syntax or configuration changes
 
+## Unreleased
+
+### Added
+
+- Local UI workspace management: create saved workspaces, select the current workspace and remove saved workspaces from `compose ui`.
+- Token-protected local workspace mutation endpoints used by the browser UI.
+
+### Changed
+
+- The local UI now treats workspace configuration as a first-class browser workflow instead of a read-only status panel.
+
 ## 0.2.0 - Local UI, reusable services and large workspace hardening
 
 ### Added
@@ -61,7 +72,7 @@ The local UI remains optional and CLI-first. It is now bundled with the npm pack
 - Initial `compose` binary and npm package setup.
 - Recursive Compose file scanner.
 - Docker Compose command builder and executor.
-- Guided mode with UI-neutral command descriptors.
+- Guided mode with UI-neutral command descriptors and option resolution.
 - Project creation, service mutation and YAML validation.
 - Interactive stack browser with stack and service actions.
 - Live stack and service runtime status via `docker compose ps --format json`.

@@ -12,7 +12,7 @@ export function registerUiCommand(program: Command): void {
     .action(async (options: UiCommandOptions) => {
       const uiServer = await startLocalUiServer({
         port: options.port,
-        open: options.open,
+        ...(options.open === undefined ? {} : { open: options.open }),
         ...(options.workspace === undefined ? {} : { workspaceName: options.workspace }),
         ...(options.skipDocker === undefined ? {} : { skipDocker: options.skipDocker }),
       });

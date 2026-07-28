@@ -15,7 +15,12 @@ import {
   updateComposeProjectService,
   validateComposeProject,
 } from '../app/index.js';
-import type { ComposeApplicationCommandOptions, ComposeProjectServiceInput, UpdateComposeProjectServiceInput } from '../app/index.js';
+import type {
+  ComposeApplicationCommandOptions,
+  ComposeProjectServiceInput,
+  ScanWarning,
+  UpdateComposeProjectServiceInput,
+} from '../app/index.js';
 import type { ComposeSubCommand } from '../compose/compose-command.js';
 import { inquirerPromptAdapter } from './inquirer-prompt-adapter.js';
 import { resolvePackageVersion } from './package-metadata.js';
@@ -42,8 +47,25 @@ function registerScanCommand(program: Command): void {
     .argument('[root]', 'root directory to scan', '.')
     .option('--json', 'output JSON')
     .option('--max-depth <depth>', 'maximum recursive depth', parseInteger)
-    .action(async (root: string, options: { json?: boolean; maxDepth?: number }) => {
-      const projects = await scanComposeProjects({ root, ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }) });
+    .option('--exclude <name...>', 'additional directory name to exclude from traversal')
+    .option('--max-directories <count>', 'maximum directories to visit before aborting the scan', parseInteger)
+    .option('--max-entries <count>', 'maximum directory entries to inspect before aborting the scan', parseInteger)
+    .action(async (root: string, options: ScanCliOptions) => {
+      const scanWarnings: ScanWarning[] = [];
+      const projects = await scanComposeProjects({
+        root,
+        ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }),
+        ...(options.exclude === undefined ? {} : { additionalExcludedDirectoryNames: options.exclude }),
+        ...(options.maxDirectories === undefined ? {} : { maxDirectoriesVisited: options.maxDirectories }),
+        ...(options.maxEntries === undefined ? {} : { maxEntriesVisited: options.maxEntries }),
+        onWarning(warning) {
+          scanWarnings.push(warning);
+        },
+      });
+
+      for (const warning of scanWarnings) {
+        console.warn(`scan warning: ${warning.path}: ${warning.message}`);
+      }
 
       if (options.json === true) {
         console.log(JSON.stringify(projects, null, 2));
@@ -498,6 +520,14 @@ function parseInteger(value: string): number {
 type ComposeCliOptions = ComposeApplicationCommandOptions & {
   services?: boolean;
   profiles?: boolean;
+};
+
+type ScanCliOptions = {
+  json?: boolean;
+  maxDepth?: number;
+  exclude?: string[];
+  maxDirectories?: number;
+  maxEntries?: number;
 };
 
 type ProjectServiceCliOptions = {

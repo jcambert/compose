@@ -21,6 +21,8 @@ The project follows a pragmatic semver policy:
 - The local UI now treats workspace configuration as a first-class browser workflow instead of a read-only status panel.
 - Workspace management UI polished with compact forms, readable path chips, edit mode, less aggressive destructive actions and explicit remove confirmation.
 - The local UI now exposes a live streams panel for runtime status and `docker compose logs --follow` output.
+- The Live streams panel now follows the selected stack from the Stacks view and clears old stream output when the stack changes.
+- Scrollable stack and live-output panels now use themed scrollbars aligned with the local UI design.
 
 ### Fixed
 
@@ -79,7 +81,7 @@ The local UI remains optional and CLI-first. It is now bundled with the npm pack
 - Initial `compose` binary and npm package setup.
 - Recursive Compose file scanner.
 - Docker Compose command builder and executor.
-- Guided mode with UI-neutral command descriptors.
+- Guided mode with UI-neutral command descriptors and option resolution.
 - Project creation, service mutation and YAML validation.
 - Interactive stack browser with stack and service actions.
 - Live stack and service runtime status via `docker compose ps --format json`.

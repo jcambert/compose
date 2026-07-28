@@ -7,6 +7,7 @@ on:
       - 'feature/**'
       - 'fix/**'
       - 'chore/**'
+      - 'feat/**'
   pull_request:
     branches:
       - main
@@ -41,7 +42,14 @@ jobs:
         run: npm run audit
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint > lint.log 2>&1
+
+      - name: Upload lint log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-log-${{ matrix.node-version }}
+          path: lint.log
 
       - name: Typecheck
         run: npm run typecheck

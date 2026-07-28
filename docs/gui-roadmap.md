@@ -45,13 +45,14 @@ The preferred implementation path is:
 
 - Core and application services: TypeScript running in Node.js.
 - UI: React in the browser.
+- UI build: Vite bundled into local `dist/ui` assets.
 - Local UI server: local Node HTTP server.
 - Streaming: Server-Sent Events first for logs and runtime status updates.
 - WebSocket: only later, if an interactive terminal-like experience is required.
 
 The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic port by default and protects the session with a short-lived local token.
 
-The current React MVP keeps packaging simple by serving a browser shell directly from `compose ui`. It now has a rendering fallback and a regression fix for invalid generated JavaScript. A later build step should package bundled offline GUI assets once the UI/API contract is stable.
+The React UI is now bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
 
 ## Architectural rule
 
@@ -83,6 +84,7 @@ src/app/stack-browser-service.ts     wire browsing to workspace persistence
 src/app/doctor-service.ts            expose diagnostics through the app boundary
 src/app/config-service.ts            expose config export/import/path/reset
 src/app/ui-server-service.ts         expose local GUI and JSON API
+src/ui/                              React UI source bundled into dist/ui
 ```
 
 Target direction:
@@ -96,6 +98,7 @@ src/
   guided/        UI-neutral command descriptors
   interactive/   stack/service browsing workflow
   scanner/       Compose discovery
+  ui/            bundled React UI source
   workspace/     local workspaces, favorites and recents
   yaml/          Compose YAML parser/writer
 ```
@@ -229,37 +232,31 @@ Delivered behaviours:
 
 Status: completed in PR #26.
 
-## Next delivery plan
-
 ### Step 7 — Prepare v0.2.0 release
 
 Prepare a release PR that updates version metadata and release notes after the stabilized UI and scanner milestones.
 
-Candidate outputs:
+Delivered outputs:
 
 ```text
 package.json
 package-lock.json
 CHANGELOG.md
-README.md if command examples are stale
+README.md
+docs/releases/v0.2.0.md
+docs/release-readiness.md
 ```
 
-Acceptance criteria:
-
-- Version metadata is bumped consistently.
-- Release notes include PR #19 through PR #28.
-- Local validation and CI are green.
-- npm publish remains handled by the existing Trusted Publishing release workflow.
-
-Candidate PR: `release: prepare v0.2.0`.
+Status: completed in PR #29.
 
 ### Step 8 — Bundle local GUI assets
 
-Move the React MVP from browser ESM imports to local bundled assets once the v0.2.0 release decision is made.
+Move the React MVP from browser ESM imports to local bundled assets.
 
-Candidate outputs:
+Delivered outputs:
 
 ```text
+src/ui/*
 dist/ui/index.html
 dist/ui/assets/*
 ```
@@ -269,8 +266,11 @@ Acceptance criteria:
 - `compose ui` can run without downloading browser dependencies.
 - The npm package still remains CLI-first.
 - The API contract does not change.
+- Missing source-built UI assets return a visible fallback instead of a blank page.
 
-Candidate PR: `build: bundle local GUI assets`.
+Status: completed in PR #30.
+
+## Next delivery plan
 
 ### Step 9 — Add streaming for logs and runtime updates
 
@@ -284,6 +284,17 @@ GET /api/logs/stream
 ```
 
 WebSocket support remains out of scope until a concrete bidirectional use case exists.
+
+### Step 10 — Improve GUI service details
+
+Improve the stack detail panel after streaming primitives are stable.
+
+Candidate behaviours:
+
+- richer service runtime cards
+- visible ports and container names
+- last command result history for the current session
+- manual refresh without losing selection state
 
 ## Security and safety requirements
 

@@ -83,6 +83,10 @@ When `compose browse` is called without `[root]`, it uses the current workspace 
 
 Checks:
 
+- The `compose` CLI package version should be readable from package metadata.
+- The `compose` executable should be discoverable through `PATH`.
+- The npm global prefix should be resolvable with `npm prefix -g`.
+- The npm global executable directory should be present in `PATH`.
 - Node.js version must be `20.19.0+`.
 - Docker CLI must be available unless `--skip-docker` is provided.
 - Docker Compose must respond through `docker compose version` unless `--skip-docker` is provided.
@@ -98,6 +102,8 @@ Options:
 ```
 
 Standard mode fails on errors only. Strict mode fails on errors and warnings.
+
+Installation and PATH issues are warnings by default because the CLI can still be executed from a direct local path, `npm link`, or a shell that has not been reopened yet. The JSON report uses stable check identifiers such as `compose-executable`, `npm-global-prefix` and `path-npm-prefix` so a future GUI can render targeted troubleshooting messages.
 
 ## Workspaces and favorites
 
@@ -217,125 +223,3 @@ Browser prompt rules:
 - `cp` prompts for source and target paths.
 
 The browser is a terminal UX on top of the same scan and Compose execution primitives. It must not become the only way to perform an action; every generated action should remain scriptable through explicit commands.
-
-## Command-specific options
-
-### `compose up`
-
-```text
--d, --detach
---remove-orphans
---build
---scale <service=count>
-```
-
-Guided questions:
-
-- Start containers in detached mode?
-- Build images before starting?
-- Remove orphan containers?
-- Scale one or more services?
-
-### `compose down`
-
-```text
---remove-orphans
---volumes
-```
-
-Guided questions:
-
-- Remove orphan containers?
-- Remove named volumes? This is presented as a destructive option.
-
-### `compose logs`
-
-```text
--f, --follow
---tail <lines>
-```
-
-Guided questions:
-
-- Select one or more services, or leave empty for all services.
-- Follow log output?
-- Limit log lines?
-
-### `compose build`
-
-```text
---no-cache
---pull
-```
-
-Guided questions:
-
-- Select one or more services, or leave empty for all services.
-- Build without cache?
-- Pull newer base images before building?
-
-### `compose run`
-
-```text
---rm
--e, --env <key=value>
-```
-
-Guided questions:
-
-- Select the service when it was not provided on the command line.
-- Provide the command to run, or leave empty for the service default command.
-- Remove the container after run?
-- Add environment variables?
-
-### `compose exec`
-
-```text
--e, --env <key=value>
--u, --user <user>
--w, --workdir <path>
-```
-
-Guided questions:
-
-- Select the service when it was not provided on the command line.
-- Provide the command to execute, defaulting to `sh`.
-- Add environment variables?
-- Run as a specific user?
-- Use a specific working directory?
-
-## Examples
-
-```bash
-compose doctor
-compose workspace add dev C:\Sources
-compose workspace use dev
-compose browse
-compose favorites add infra
-compose favorites list
-
-compose scan .
-compose scan . --json
-compose scan C:\Sources --max-depth 8
-compose browse .
-compose stacks C:\Sources --max-depth 6 --dry-run
-
-compose up --project ./infra -d
-compose up --project ./infra --guided
-compose up --project ./infra --guided --yes --dry-run
-compose logs --project ./infra --guided
-compose exec --project ./infra --guided
-compose run --project ./infra --guided
-compose down --project ./infra --guided
-compose down --project ./infra --remove-orphans
-```
-
-## Interactive mode
-
-`compose select` remains a lightweight selector for quick project/action selection.
-
-`compose browse` is the richer interactive workflow. It is the preferred terminal experience for moving across stacks, drilling into services and executing operational actions without memorising or retyping commands.
-
-## Scriptability rule
-
-Interactive flows are convenient, but every action must be possible through explicit flags. This keeps the CLI usable in CI/CD, Makefiles, PowerShell scripts and developer automation.

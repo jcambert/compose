@@ -8,15 +8,18 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 
 - Discover every Docker Compose file recursively from a root directory.
 - Detect `docker-compose.yml`, `docker-compose.yaml`, `compose.yml` and `compose.yaml` at any depth.
+- Keep large workspace scans practical with default exclusions and traversal guard rails.
 - List discovered projects with absolute paths and service names.
 - Browse discovered stacks and services interactively.
+- Filter and sort terminal browser stack choices for large workspaces.
 - Display live stack and service runtime status in the browser.
 - Persist named workspaces, favorites and recent stacks for daily usage.
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Diagnose local setup with `compose doctor`.
+- Start an optional local browser UI with `compose ui`.
 - Keep the codebase modular, testable and distributable through npm.
-- Keep command descriptors UI-neutral so a future GUI can reuse them.
+- Keep command descriptors UI-neutral so the CLI and GUI reuse the same application services.
 
 ## Installation
 
@@ -44,7 +47,8 @@ compose --help
 compose doctor
 compose workspace add dev C:\Sources
 compose workspace use dev
-compose browse
+compose browse --filter api --sort runtime
+compose ui --workspace dev
 ```
 
 Use `compose doctor --skip-docker` for CI or smoke-test environments where Docker is intentionally unavailable.
@@ -57,6 +61,9 @@ compose workspace use dev
 compose workspace current
 compose workspace list
 compose browse
+compose browse --filter api
+compose browse --sort runtime
+compose browse C:\Sources --filter monitoring --sort path
 compose favorites add infra
 compose favorites list
 
@@ -67,9 +74,16 @@ compose config reset --yes
 
 compose scan .
 compose scan C:\Sources --json
+compose scan C:\Sources --exclude artifacts tmp-generated
+compose scan C:\Sources --max-depth 6 --max-directories 100000 --max-entries 500000
 compose select .
 compose browse .
-compose stacks C:\Sources --max-depth 6 --dry-run
+compose stacks C:\Sources --max-depth 6 --filter worker --sort services --dry-run
+
+compose ui
+compose ui --workspace dev
+compose ui --port 0
+compose ui --skip-docker --no-open
 
 compose up --project ./infra --detach
 compose up --project ./infra --guided
@@ -203,6 +217,8 @@ Use `compose browse` when you want to scan a root directory and navigate stacks 
 compose browse
 compose browse .
 compose browse C:\Sources --max-depth 8
+compose browse C:\Sources --filter monitoring --sort path
+compose browse --filter api --sort runtime
 compose stacks . --dry-run
 ```
 
@@ -238,6 +254,46 @@ The browser lets you:
 
 `--dry-run` prints the generated Docker command without executing it and does not call Docker for runtime status.
 
+## Scanner performance
+
+The scanner skips common generated, dependency-heavy and IDE directories by default, including `node_modules`, `.git`, `.cache`, `.next`, `.turbo`, `.terraform`, `.venv`, `dist`, `build`, `bin`, `obj` and `target`.
+
+Additional machine-specific folders can be skipped with `--exclude`:
+
+```bash
+compose scan C:\Sources --exclude artifacts tmp-generated
+compose scan C:\Sources --max-depth 6 --max-directories 100000 --max-entries 500000
+compose scan C:\Sources --json --max-depth 5 > stacks.json
+```
+
+`compose scan --json` keeps JSON on stdout and writes scanner warnings to stderr so scripts can parse stdout safely.
+
+See [`docs/scanner-performance.md`](docs/scanner-performance.md) for the detailed safety model.
+
+## Local UI
+
+`compose ui` starts an optional browser-based local interface from the CLI.
+
+```bash
+compose ui
+compose ui --workspace dev
+compose ui --port 0
+compose ui --skip-docker --no-open
+```
+
+The local UI:
+
+- binds to `127.0.0.1`
+- uses a dynamic free port by default
+- protects the browser session and API with a short-lived token
+- shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews
+- requires explicit confirmation before command execution
+- requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`
+
+The current React MVP uses browser ESM imports for React. In restricted corporate, proxy or offline environments, those imports can be blocked. The page includes a visible loading fallback, and the planned durable fix is the bundled local GUI asset pipeline.
+
+See [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
+
 ## Guided mode
 
 Use `--guided` when you want `compose` to ask useful questions before executing a Docker Compose command.
@@ -270,7 +326,7 @@ compose up --project ./infra --guided --yes --dry-run
 
 ```text
 src/
-  app/          reusable application services for CLI and future GUI adapters
+  app/          reusable application services for CLI and GUI adapters
   cli/          terminal entrypoint, command registration and terminal adapters
   compose/      Docker Compose command building and execution
   doctor/       local diagnostic checks
@@ -285,7 +341,12 @@ docs/
   cli-design.md
   compose-command-surface.md
   config-management.md
+  gui-roadmap.md
+  local-ui-server.md
+  browser-filtering-sorting.md
+  scanner-performance.md
   release.md
+  release-readiness.md
   backlog.md
   sprint-plan.md
   testing-strategy.md
@@ -329,7 +390,8 @@ compose doctor
 compose workspace add dev C:\Sources
 compose config path
 compose config export
-compose browse --dry-run
+compose browse --filter api --sort runtime --dry-run
+compose ui --skip-docker --no-open
 ```
 
 ## Release discipline
@@ -342,6 +404,10 @@ See:
 - [`docs/cli-design.md`](docs/cli-design.md)
 - [`docs/compose-command-surface.md`](docs/compose-command-surface.md)
 - [`docs/config-management.md`](docs/config-management.md)
+- [`docs/local-ui-server.md`](docs/local-ui-server.md)
+- [`docs/browser-filtering-sorting.md`](docs/browser-filtering-sorting.md)
+- [`docs/scanner-performance.md`](docs/scanner-performance.md)
 - [`docs/release.md`](docs/release.md)
+- [`docs/release-readiness.md`](docs/release-readiness.md)
 - [`docs/testing-strategy.md`](docs/testing-strategy.md)
 - [`docs/devops.md`](docs/devops.md)

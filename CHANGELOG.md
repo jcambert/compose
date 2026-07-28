@@ -8,6 +8,36 @@ The project follows a pragmatic semver policy:
 - minor releases add compatible user-facing commands or workflows
 - major releases introduce breaking command syntax or configuration changes
 
+## 0.2.0 - Local UI, reusable services and large workspace hardening
+
+### Added
+
+- Reusable `src/app` application service layer for scanner, workspace, favorites, doctor, config, project mutation, command preview and command execution use cases.
+- Hardened `compose doctor` diagnostics for package version, executable discovery, npm global prefix, PATH integration, Node.js, Docker, Docker Compose, config access and current workspace.
+- Local configuration management commands: `compose config path`, `compose config export`, `compose config import` and `compose config reset`.
+- Optional local UI server launched with `compose ui`, bound to `127.0.0.1`, protected by a short-lived token and backed by the same application services as the CLI.
+- React-based local UI MVP for doctor diagnostics, workspaces, stacks, stack details, runtime summary, command preview and command execution result display.
+- Terminal browser filtering and sorting through `compose browse --filter <text>` and `compose browse --sort name|path|services|runtime`.
+- Scanner exclusions, symbolic link skipping, traversal guard rails and `compose scan --exclude`, `--max-directories` and `--max-entries` options for large source folders.
+- Release readiness documentation for the `v0.2.0` publication process.
+
+### Changed
+
+- CLI commands now delegate more behaviour through reusable application services while keeping Commander and prompt handling in the CLI adapter.
+- Scanner warnings can be surfaced without polluting `compose scan --json` stdout.
+- The local UI keeps command execution behind explicit preview and confirmation flows, with stronger confirmation for destructive commands.
+- Product backlog and GUI roadmap now reflect the CLI-first direction and the delivered optional local UI milestones.
+
+### Fixed
+
+- `compose ui` no longer serves invalid generated JavaScript for command execution output containing newline joins.
+- The local UI root now includes a visible loading fallback so a browser page is not completely blank before React mounts.
+- Scanner traversal now avoids common generated, dependency-heavy, IDE and cache directories by default.
+
+### Notes
+
+The React MVP still uses browser ESM imports for React. Environments that block the external browser import source can prevent the React app from mounting. This limitation is documented in `docs/local-ui-server.md` and `docs/release-readiness.md`; the follow-up durable fix is the bundled local GUI asset pipeline.
+
 ## 0.1.2 - CLI package metadata fix
 
 ### Fixed

@@ -112,7 +112,7 @@ async function readDirectoryEntries(currentDirectoryPath: string, context: ScanC
     const message = error instanceof Error ? error.message : 'Unable to read directory.';
 
     if (currentDirectoryPath === context.rootAbsolutePath) {
-      throw new Error(`Unable to read scan root ${currentDirectoryPath}: ${message}`);
+      throw new Error(`Unable to read scan root ${currentDirectoryPath}: ${message}`, { cause: error });
     }
 
     context.onWarning?.({

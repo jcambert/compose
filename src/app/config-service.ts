@@ -177,14 +177,18 @@ function parseFavoriteStacks(value: unknown, errors: string[]): FavoriteStack[] 
     return [];
   }
 
-  return value.flatMap((favorite, index) => {
+  const favoriteStacks: FavoriteStack[] = [];
+
+  value.forEach((favorite, index) => {
     if (!isFavoriteStack(favorite)) {
       errors.push(`favoriteStacks[${index}] is invalid`);
-      return [];
+      return;
     }
 
-    return [favorite];
+    favoriteStacks.push(favorite);
   });
+
+  return favoriteStacks;
 }
 
 function parseRecentStacks(value: unknown, errors: string[]): RecentStack[] {
@@ -193,14 +197,18 @@ function parseRecentStacks(value: unknown, errors: string[]): RecentStack[] {
     return [];
   }
 
-  return value.flatMap((recent, index) => {
+  const recentStacks: RecentStack[] = [];
+
+  value.forEach((recent, index) => {
     if (!isRecentStack(recent)) {
       errors.push(`recentStacks[${index}] is invalid`);
-      return [];
+      return;
     }
 
-    return [recent];
+    recentStacks.push(recent);
   });
+
+  return recentStacks;
 }
 
 function parseCurrentWorkspaceName(

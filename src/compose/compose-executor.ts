@@ -1,7 +1,11 @@
 import { execa } from 'execa';
 import { buildComposeCommand } from './compose-command-builder.js';
 import type { ComposeExecutionRequest } from './compose-command.js';
-import { createComposeExecutionDiagnostic, type ComposeExecutionDiagnostic } from './compose-error-reporting.js';
+import {
+  createComposeExecutionDiagnostic,
+  formatComposeExecutionDiagnostic,
+  type ComposeExecutionDiagnostic,
+} from './compose-error-reporting.js';
 
 export type ComposeExecutionResult = {
   command: string;
@@ -64,6 +68,10 @@ export async function executeComposeCommand(
       stderr: result.stderr,
       ...(result.error === undefined ? {} : { error: result.error }),
     });
+
+  if (diagnostic !== undefined && runner === defaultProcessRunner) {
+    console.error(`\n${formatComposeExecutionDiagnostic(diagnostic)}`);
+  }
 
   return {
     command: builtCommand.displayCommand,

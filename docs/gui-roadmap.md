@@ -44,12 +44,14 @@ Desktop packaging can be reconsidered after the local browser-based GUI proves u
 The preferred implementation path is:
 
 - Core and application services: TypeScript running in Node.js.
-- UI: React + Vite + TypeScript.
-- Local UI server: Fastify, or a minimal Node HTTP server if the first step only needs static files and a few JSON endpoints.
+- UI: React in the browser.
+- Local UI server: local Node HTTP server.
 - Streaming: Server-Sent Events first for logs and runtime status updates.
 - WebSocket: only later, if an interactive terminal-like experience is required.
 
 The GUI is served by the CLI from `127.0.0.1` only. It should choose a free dynamic port by default and protect the session with a short-lived local token.
+
+The first React MVP keeps packaging simple by serving a React browser shell directly from `compose ui`. A later build step can package bundled offline GUI assets once the UI/API contract is stable.
 
 ## Architectural rule
 
@@ -79,25 +81,26 @@ src/app/project-service.ts           create/update/validate Compose projects
 src/app/workspace-service.ts         manage workspaces and favorites
 src/app/stack-browser-service.ts     wire browsing to workspace persistence
 src/app/doctor-service.ts            expose diagnostics through the app boundary
+src/app/config-service.ts            expose config export/import/path/reset
+src/app/ui-server-service.ts         expose local GUI and JSON API
 ```
 
 Target direction:
 
 ```text
 src/
-  app/           reusable application services shared by CLI and GUI
-  cli/           terminal adapter and command registration
+  app/           reusable application services shared by CLI and GUI adapters
+  cli/           terminal entrypoint, command registration and terminal adapters
   compose/       Docker Compose command model, builder and executor
   doctor/        diagnostics model and runner
   guided/        UI-neutral command descriptors
   interactive/   stack/service browsing workflow
   scanner/       Compose discovery
-  ui-server/     local HTTP server for compose ui
   workspace/     local workspaces, favorites and recents
   yaml/          Compose YAML parser/writer
 ```
 
-The `app` and `ui-server` modules should be introduced incrementally, not through a large rewrite.
+The `app` modules are introduced incrementally, not through a large rewrite.
 
 ## Delivery plan
 
@@ -135,7 +138,7 @@ Acceptance criteria:
 - Tests cover application services directly.
 - Existing CLI behaviour remains unchanged.
 
-Status: in progress through PR #20.
+Status: completed in PR #20.
 
 ### Step 3 — Add `compose ui` with a minimal local server
 
@@ -169,9 +172,11 @@ Acceptance criteria:
 - Destructive actions require explicit confirmation data in the request.
 - The server can be tested without launching a browser.
 
+Status: completed in PR #23.
+
 ### Step 4 — Add the React GUI MVP
 
-Add a small UI served by `compose ui`.
+Add a small React UI served by `compose ui`.
 
 MVP screens:
 
@@ -190,7 +195,26 @@ MVP constraints:
 - The UI uses existing command descriptors and command intent models.
 - The UI remains optional and is not required for CLI usage.
 
-### Step 5 — Add streaming for logs and runtime updates
+Status: in progress through PR #24.
+
+### Step 5 — Bundle local GUI assets
+
+Move the React MVP from browser ESM imports to local bundled assets once the UX and API contract are stable.
+
+Candidate outputs:
+
+```text
+dist/ui/index.html
+dist/ui/assets/*
+```
+
+Acceptance criteria:
+
+- `compose ui` can run without downloading browser dependencies.
+- The npm package still remains CLI-first.
+- The API contract does not change.
+
+### Step 6 — Add streaming for logs and runtime updates
 
 Use Server-Sent Events for long-running output and status refreshes.
 

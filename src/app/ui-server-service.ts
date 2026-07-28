@@ -22,8 +22,13 @@ import type {
 import { runDoctor } from './doctor-service.js';
 import type { DoctorOptions, DoctorReport } from './doctor-service.js';
 import { scanComposeProjects } from './scan-service.js';
-import { listWorkspaceEntries } from './workspace-service.js';
-import type { WorkspaceListResult } from './workspace-service.js';
+import {
+  addWorkspaceEntry,
+  listWorkspaceEntries,
+  removeWorkspaceEntry,
+  setCurrentWorkspace,
+} from './workspace-service.js';
+import type { WorkspaceListResult, WorkspaceMutationInput, WorkspaceNameInput } from './workspace-service.js';
 
 export type LocalUiServerOptions = {
   port?: number;
@@ -47,6 +52,9 @@ export type LocalUiServerDependencies = {
   openBrowser?: (url: string) => Promise<void> | void;
   runDoctor?: (options?: DoctorOptions) => Promise<DoctorReport>;
   listWorkspaces?: () => Promise<WorkspaceListResult>;
+  addWorkspace?: (input: WorkspaceMutationInput) => Promise<unknown>;
+  setWorkspace?: (input: WorkspaceNameInput) => Promise<unknown>;
+  removeWorkspace?: (input: WorkspaceNameInput) => Promise<unknown>;
   scanProjects?: (input: { root?: string; maxDepth?: number }) => Promise<DiscoveredComposeProject[]>;
   readRuntimeStatus?: (project: DiscoveredComposeProject) => Promise<StackRuntimeStatus>;
   previewCommand?: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
@@ -57,6 +65,9 @@ type RuntimeDependencies = {
   openBrowser: (url: string) => Promise<void> | void;
   runDoctor: (options?: DoctorOptions) => Promise<DoctorReport>;
   listWorkspaces: () => Promise<WorkspaceListResult>;
+  addWorkspace: (input: WorkspaceMutationInput) => Promise<unknown>;
+  setWorkspace: (input: WorkspaceNameInput) => Promise<unknown>;
+  removeWorkspace: (input: WorkspaceNameInput) => Promise<unknown>;
   scanProjects: (input: { root?: string; maxDepth?: number }) => Promise<DiscoveredComposeProject[]>;
   readRuntimeStatus: (project: DiscoveredComposeProject) => Promise<StackRuntimeStatus>;
   previewCommand: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
@@ -213,6 +224,26 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/workspaces') {
+      await context.dependencies.addWorkspace(parseWorkspaceMutationPayload(await readRequestJson(request)));
+      sendJson(response, 200, await context.dependencies.listWorkspaces());
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/workspaces/current') {
+      await context.dependencies.setWorkspace(parseWorkspaceNamePayload(await readRequestJson(request)));
+      sendJson(response, 200, await context.dependencies.listWorkspaces());
+      return;
+    }
+
+    const workspaceNameToRemove = matchWorkspacePath(url.pathname);
+
+    if (request.method === 'DELETE' && workspaceNameToRemove !== undefined) {
+      await context.dependencies.removeWorkspace({ name: workspaceNameToRemove });
+      sendJson(response, 200, await context.dependencies.listWorkspaces());
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/stacks') {
       const scanContext = await resolveStackScanContext(url, context);
       const stacks = await scanProjects(scanContext, context.dependencies);
@@ -279,6 +310,9 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Run
     openBrowser: dependencies.openBrowser ?? openLocalBrowser,
     runDoctor: dependencies.runDoctor ?? runDoctor,
     listWorkspaces: dependencies.listWorkspaces ?? listWorkspaceEntries,
+    addWorkspace: dependencies.addWorkspace ?? addWorkspaceEntry,
+    setWorkspace: dependencies.setWorkspace ?? setCurrentWorkspace,
+    removeWorkspace: dependencies.removeWorkspace ?? removeWorkspaceEntry,
     scanProjects: dependencies.scanProjects ?? scanComposeProjects,
     readRuntimeStatus: dependencies.readRuntimeStatus ?? ((project) => readStackRuntimeStatus(project, {})),
     previewCommand: dependencies.previewCommand ?? ((input) => previewComposeApplicationCommand(input)),
@@ -452,6 +486,27 @@ function createMissingUiAssetsHtml(token: string): string {
 </html>`;
 }
 
+function parseWorkspaceMutationPayload(value: unknown): WorkspaceMutationInput {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Workspace request body must be a JSON object.');
+  }
+
+  return {
+    name: readRequiredString(value.name, 'name'),
+    path: readRequiredString(value.path, 'path'),
+  };
+}
+
+function parseWorkspaceNamePayload(value: unknown): WorkspaceNameInput {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Workspace request body must be a JSON object.');
+  }
+
+  return {
+    name: readRequiredString(value.name, 'name'),
+  };
+}
+
 function parseCommandPayload(value: unknown): CommandPayload {
   if (!isObject(value)) {
     throw new LocalUiHttpError(400, 'invalid-json', 'Command request body must be a JSON object.');
@@ -530,6 +585,14 @@ function readComposeSubCommand(value: unknown): ComposeSubCommand {
   return value as ComposeSubCommand;
 }
 
+function readRequiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new LocalUiHttpError(400, 'invalid-string', `${fieldName} must be a non-empty string.`);
+  }
+
+  return value.trim();
+}
+
 function readOptionalStringArray(value: unknown): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -596,6 +659,11 @@ function readBooleanQuery(url: URL, name: string): boolean | undefined {
   }
 
   throw new LocalUiHttpError(400, 'invalid-query', `${name} must be true or false.`);
+}
+
+function matchWorkspacePath(pathname: string): string | undefined {
+  const match = /^\/api\/workspaces\/([^/]+)$/.exec(pathname);
+  return match?.[1] === undefined ? undefined : decodeURIComponent(match[1]);
 }
 
 function matchStackRuntimePath(pathname: string): string | undefined {

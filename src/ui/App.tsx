@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  apiDelete,
   apiGet,
   apiPost,
   type BuiltComposeCommand,
@@ -10,6 +11,7 @@ import {
   type DoctorReport,
   type StackListResult,
   type StackRuntimeStatus,
+  type WorkspaceDefinition,
   type WorkspaceListResult,
 } from './api';
 
@@ -17,7 +19,7 @@ type AppProps = {
   token: string;
 };
 
-type AppView = 'dashboard' | 'stacks' | 'doctor' | 'commands';
+type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'doctor' | 'commands';
 
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
 
@@ -47,10 +49,19 @@ type CommandFormState = {
   error?: string;
 };
 
+type WorkspaceFormState = {
+  name: string;
+  path: string;
+  busy: boolean;
+  message?: string;
+  error?: string;
+};
+
 type DashboardSummary = {
   stackCount: number;
   serviceCount: number;
   workspaceLabel: string;
+  workspaceCount: number;
   doctorIssues: number;
   runtimeLabel: string;
   selectedStackLabel: string;
@@ -66,6 +77,7 @@ export function App({ token }: AppProps) {
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
   const [stackSearch, setStackSearch] = useState('');
   const [stackSort, setStackSort] = useState<StackSortMode>('name');
+  const [workspaceForm, setWorkspaceForm] = useState<WorkspaceFormState>({ name: '', path: '', busy: false });
   const [form, setForm] = useState<CommandFormState>({
     command: 'ps',
     serviceName: '',
@@ -119,6 +131,66 @@ export function App({ token }: AppProps) {
       setRuntime({ loading: false, status });
     } catch (error) {
       setRuntime({ loading: false, error: error instanceof Error ? error.message : 'Runtime unavailable.' });
+    }
+  }
+
+  async function createWorkspaceFromUi() {
+    const name = workspaceForm.name.trim();
+    const path = workspaceForm.path.trim();
+
+    if (name.length === 0 || path.length === 0) {
+      setWorkspaceForm((current) => ({ ...current, error: 'Workspace name and path are required.', message: undefined }));
+      return;
+    }
+
+    await runWorkspaceMutation(
+      () => apiPost<WorkspaceListResult>(token, '/api/workspaces', { name, path }),
+      `Workspace ${name} was saved.`,
+      true,
+    );
+  }
+
+  async function useWorkspaceFromUi(name: string) {
+    await runWorkspaceMutation(
+      () => apiPost<WorkspaceListResult>(token, '/api/workspaces/current', { name }),
+      `Workspace ${name} is now current.`,
+      false,
+    );
+  }
+
+  async function removeWorkspaceFromUi(name: string) {
+    await runWorkspaceMutation(
+      () => apiDelete<WorkspaceListResult>(token, `/api/workspaces/${encodeURIComponent(name)}`),
+      `Workspace ${name} was removed.`,
+      false,
+    );
+  }
+
+  async function runWorkspaceMutation(
+    mutation: () => Promise<WorkspaceListResult>,
+    successMessage: string,
+    clearCreateForm: boolean,
+  ) {
+    setWorkspaceForm((current) => ({ ...current, busy: true, error: undefined, message: undefined }));
+
+    try {
+      const workspaces = await mutation();
+      setState((current) => ({ ...current, workspaces }));
+      setWorkspaceForm((current) => ({
+        name: clearCreateForm ? '' : current.name,
+        path: clearCreateForm ? '' : current.path,
+        busy: false,
+        message: successMessage,
+      }));
+      setSelectedId(undefined);
+      clearCommandFeedback(setForm);
+      await load();
+    } catch (error) {
+      setWorkspaceForm((current) => ({
+        ...current,
+        busy: false,
+        error: error instanceof Error ? error.message : 'Unable to update workspace configuration.',
+      }));
     }
   }
 
@@ -188,7 +260,7 @@ export function App({ token }: AppProps) {
       <Sidebar activeView={activeView} setActiveView={setActiveView} summary={summary} />
       <main className="app-shell">
         <TopBar
-          loading={state.loading}
+          loading={state.loading || workspaceForm.busy}
           workspaceLabel={summary.workspaceLabel}
           health={state.health}
           onRefresh={() => void load()}
@@ -204,6 +276,18 @@ export function App({ token }: AppProps) {
             runtime={runtime}
             setActiveView={setActiveView}
             onRefresh={() => void load()}
+          />
+        ) : null}
+
+        {activeView === 'workspaces' ? (
+          <WorkspacesView
+            workspaces={state.workspaces}
+            form={workspaceForm}
+            setForm={setWorkspaceForm}
+            onCreate={() => void createWorkspaceFromUi()}
+            onUse={(name) => void useWorkspaceFromUi(name)}
+            onRemove={(name) => void removeWorkspaceFromUi(name)}
+            onOpenStacks={() => setActiveView('stacks')}
           />
         ) : null}
 
@@ -267,6 +351,7 @@ function Sidebar({
       </div>
       <nav className="sidebar-nav" aria-label="Main navigation">
         <NavButton active={activeView === 'dashboard'} label="Dashboard" description="Overview" onClick={() => setActiveView('dashboard')} />
+        <NavButton active={activeView === 'workspaces'} label="Workspaces" description={`${summary.workspaceCount} saved`} onClick={() => setActiveView('workspaces')} />
         <NavButton active={activeView === 'stacks'} label="Stacks" description={`${summary.stackCount} projects`} onClick={() => setActiveView('stacks')} />
         <NavButton active={activeView === 'doctor'} label="Doctor" description={summary.doctorIssues === 0 ? 'Healthy' : `${summary.doctorIssues} issues`} onClick={() => setActiveView('doctor')} />
         <NavButton active={activeView === 'commands'} label="Commands" description="Preview first" onClick={() => setActiveView('commands')} />
@@ -339,11 +424,12 @@ function DashboardView({
           <p className="eyebrow">Professional local UI</p>
           <h2>Operate your Compose stacks with confidence.</h2>
           <p className="muted">
-            Inspect diagnostics, browse stacks, preview Docker Compose commands and execute only after explicit confirmation.
+            Manage workspaces, inspect diagnostics, browse stacks, preview Docker Compose commands and execute only after explicit confirmation.
           </p>
         </div>
         <div className="hero-actions">
-          <button type="button" onClick={() => setActiveView('stacks')}>Browse stacks</button>
+          <button type="button" onClick={() => setActiveView('workspaces')}>Manage workspaces</button>
+          <button className="secondary" type="button" onClick={() => setActiveView('stacks')}>Browse stacks</button>
           <button className="secondary" type="button" onClick={() => setActiveView('commands')}>Prepare command</button>
         </div>
       </section>
@@ -351,6 +437,7 @@ function DashboardView({
       {loading ? <SkeletonGrid /> : null}
 
       <section className="metric-grid" aria-label="Workspace summary">
+        <MetricCard label="Workspaces" value={summary.workspaceCount.toString()} detail={summary.workspaceLabel} tone="info" />
         <MetricCard label="Stacks" value={summary.stackCount.toString()} detail={state.stacks?.root ?? 'Waiting for scan'} tone="info" />
         <MetricCard label="Services" value={summary.serviceCount.toString()} detail="Declared across detected stacks" tone="ok" />
         <MetricCard label="Doctor" value={summary.doctorIssues === 0 ? 'OK' : summary.doctorIssues.toString()} detail={summary.doctorIssues === 0 ? 'No issue detected' : 'Warnings or errors found'} tone={summary.doctorIssues === 0 ? 'ok' : 'warning'} />
@@ -359,21 +446,136 @@ function DashboardView({
 
       <section className="grid two-columns">
         <Panel title="Current workspace" subtitle="Local configuration">
-          <WorkspacePanel workspaces={state.workspaces} health={state.health} />
+          <WorkspacePanel workspaces={state.workspaces} health={state.health} onManage={() => setActiveView('workspaces')} />
         </Panel>
         <Panel title="Recommended workflow" subtitle="Safe by default">
           <div className="timeline">
-            <Step number="1" title="Select a stack" detail="Search and inspect services before choosing an action." />
-            <Step number="2" title="Preview command" detail="The generated docker compose command is shown before execution." />
-            <Step number="3" title="Confirm execution" detail="Dangerous actions require a second explicit confirmation." />
+            <Step number="1" title="Choose a workspace" detail="Create or select the source root you want to operate from." />
+            <Step number="2" title="Select a stack" detail="Search and inspect services before choosing an action." />
+            <Step number="3" title="Preview command" detail="The generated docker compose command is shown before execution." />
+            <Step number="4" title="Confirm execution" detail="Dangerous actions require a second explicit confirmation." />
           </div>
           <div className="actions compact-actions">
-            <button type="button" onClick={() => setActiveView('stacks')}>Open stacks</button>
+            <button type="button" onClick={() => setActiveView('workspaces')}>Manage workspaces</button>
+            <button className="secondary" type="button" onClick={() => setActiveView('stacks')}>Open stacks</button>
             <button className="secondary" type="button" onClick={onRefresh}>Refresh data</button>
           </div>
         </Panel>
       </section>
     </div>
+  );
+}
+
+function WorkspacesView({
+  workspaces,
+  form,
+  setForm,
+  onCreate,
+  onUse,
+  onRemove,
+  onOpenStacks,
+}: {
+  workspaces?: WorkspaceListResult;
+  form: WorkspaceFormState;
+  setForm: React.Dispatch<React.SetStateAction<WorkspaceFormState>>;
+  onCreate: () => void;
+  onUse: (name: string) => void;
+  onRemove: (name: string) => void;
+  onOpenStacks: () => void;
+}) {
+  const entries = workspaces?.workspaces ?? [];
+  const currentWorkspaceName = workspaces?.currentWorkspaceName;
+
+  return (
+    <div className="view-stack">
+      <section className="hero-panel compact-hero">
+        <div>
+          <p className="eyebrow">Workspace management</p>
+          <h2>Configure source roots from the browser.</h2>
+          <p className="muted">Add, select and remove local workspaces without returning to the terminal.</p>
+        </div>
+        <button className="secondary" type="button" onClick={onOpenStacks}>Open stacks</button>
+      </section>
+
+      <section className="grid two-columns workspace-management-grid">
+        <Panel title="Create workspace" subtitle="Saved in the local user config">
+          <div className="workspace-form">
+            <label>
+              Name
+              <input
+                placeholder="dev"
+                value={form.name}
+                disabled={form.busy}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value, error: undefined, message: undefined }))}
+              />
+            </label>
+            <label>
+              Path
+              <input
+                placeholder="C:\\Sources or /home/me/sources"
+                value={form.path}
+                disabled={form.busy}
+                onChange={(event) => setForm((current) => ({ ...current, path: event.target.value, error: undefined, message: undefined }))}
+              />
+            </label>
+            <div className="actions">
+              <button type="button" onClick={onCreate} disabled={form.busy}>{form.busy ? 'Saving...' : 'Save workspace'}</button>
+            </div>
+            {form.error === undefined ? null : <Banner tone="danger">{form.error}</Banner>}
+            {form.message === undefined ? null : <Banner tone="info">{form.message}</Banner>}
+          </div>
+        </Panel>
+
+        <Panel title="Saved workspaces" subtitle={currentWorkspaceName === undefined ? 'No current workspace' : `Current: ${currentWorkspaceName}`}>
+          <div className="workspace-list">
+            {entries.length === 0 ? (
+              <EmptyState title="No workspace saved yet" detail="Create a workspace to make scan and stack operations start from a known root." />
+            ) : (
+              entries.map((workspace) => (
+                <WorkspaceCard
+                  key={workspace.name}
+                  workspace={workspace}
+                  current={workspace.name === currentWorkspaceName}
+                  busy={form.busy}
+                  onUse={() => onUse(workspace.name)}
+                  onRemove={() => onRemove(workspace.name)}
+                />
+              ))
+            )}
+          </div>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+function WorkspaceCard({
+  workspace,
+  current,
+  busy,
+  onUse,
+  onRemove,
+}: {
+  workspace: WorkspaceDefinition;
+  current: boolean;
+  busy: boolean;
+  onUse: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <article className={current ? 'workspace-card current' : 'workspace-card'}>
+      <div>
+        <div className="workspace-title-row">
+          <strong>{workspace.name}</strong>
+          {current ? <StatusPill tone="ok">Current</StatusPill> : <StatusPill tone="warning">Saved</StatusPill>}
+        </div>
+        <span className="path-text">{workspace.path}</span>
+      </div>
+      <div className="workspace-card-actions">
+        <button className="secondary" type="button" onClick={onUse} disabled={busy || current}>Use</button>
+        <button className="danger" type="button" onClick={onRemove} disabled={busy}>Remove</button>
+      </div>
+    </article>
   );
 }
 
@@ -627,7 +829,7 @@ function CommandView({
   );
 }
 
-function WorkspacePanel({ workspaces, health }: { workspaces?: WorkspaceListResult; health?: { host: string } }) {
+function WorkspacePanel({ workspaces, health, onManage }: { workspaces?: WorkspaceListResult; health?: { host: string }; onManage: () => void }) {
   const entries = workspaces?.workspaces ?? [];
 
   return (
@@ -639,9 +841,9 @@ function WorkspacePanel({ workspaces, health }: { workspaces?: WorkspaceListResu
       )}
       <div className="list">
         {entries.length === 0 ? (
-          <EmptyState title="No workspace saved yet" detail="Create a workspace from the CLI to make the UI open directly on your usual source root." />
+          <EmptyState title="No workspace saved yet" detail="Create a workspace from the UI to make scans start from your usual source root." />
         ) : (
-          entries.map((workspace) => (
+          entries.slice(0, 4).map((workspace) => (
             <article key={workspace.name} className="list-item">
               <strong>{workspace.name}</strong>
               <span>{workspace.path}</span>
@@ -649,7 +851,10 @@ function WorkspacePanel({ workspaces, health }: { workspaces?: WorkspaceListResu
           ))
         )}
       </div>
-      {health === undefined ? null : <small className="muted">Server: {health.host}</small>}
+      <div className="actions compact-actions">
+        <button type="button" onClick={onManage}>Manage workspaces</button>
+        {health === undefined ? null : <small className="muted">Server: {health.host}</small>}
+      </div>
     </div>
   );
 }
@@ -801,6 +1006,7 @@ function SkeletonGrid() {
       <div className="skeleton-card" />
       <div className="skeleton-card" />
       <div className="skeleton-card" />
+      <div className="skeleton-card" />
     </section>
   );
 }
@@ -849,6 +1055,7 @@ function createDashboardSummary(
     stackCount: stacks.length,
     serviceCount: stacks.reduce((total, project) => total + project.services.length, 0),
     workspaceLabel: state.workspaces?.currentWorkspaceName ?? state.stacks?.workspaceName ?? 'No workspace',
+    workspaceCount: state.workspaces?.workspaces.length ?? 0,
     doctorIssues,
     runtimeLabel: runtime.loading ? 'Loading' : runtime.status?.state ?? (runtime.error === undefined ? 'Unknown' : 'Unavailable'),
     selectedStackLabel: selectedProject?.name ?? 'No stack selected',

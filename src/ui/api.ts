@@ -10,12 +10,16 @@ export type DoctorReport = {
   }>;
 };
 
+export type WorkspaceDefinition = {
+  name: string;
+  path: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type WorkspaceListResult = {
   currentWorkspaceName?: string;
-  workspaces: Array<{
-    name: string;
-    path: string;
-  }>;
+  workspaces: WorkspaceDefinition[];
 };
 
 export type DiscoveredComposeProject = {
@@ -69,13 +73,19 @@ export async function apiGet<T>(token: string, path: string): Promise<T> {
   return api<T>(token, path);
 }
 
-export async function apiPost<T>(token: string, path: string, body: CommandRequest): Promise<T> {
+export async function apiPost<T>(token: string, path: string, body: unknown): Promise<T> {
   return api<T>(token, path, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
     },
     body: JSON.stringify(body),
+  });
+}
+
+export async function apiDelete<T>(token: string, path: string): Promise<T> {
+  return api<T>(token, path, {
+    method: 'DELETE',
   });
 }
 

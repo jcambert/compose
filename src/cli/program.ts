@@ -1,21 +1,18 @@
 import { select } from '@inquirer/prompts';
 import { Command } from 'commander';
-import { dirname } from 'node:path';
-import { buildComposeCommand } from '../compose/compose-command-builder.js';
-import { executeComposeCommand } from '../compose/compose-executor.js';
+import {
+  addComposeProjectService,
+  createComposeProjectApplication,
+  executeComposeApplicationCommand,
+  removeComposeProjectService,
+  scanComposeProjects,
+  updateComposeProjectService,
+  validateComposeProject,
+} from '../app/index.js';
+import type { ComposeApplicationCommandOptions, ComposeProjectServiceInput, UpdateComposeProjectServiceInput } from '../app/index.js';
 import type { ComposeSubCommand } from '../compose/compose-command.js';
-import { resolveGuidedCommand } from '../guided/guided-command-resolver.js';
-import { createComposeProject } from '../project/project-factory.js';
-import type { CreateComposeProjectOptions } from '../project/project-factory.js';
-import { loadComposeProject, saveComposeProject } from '../project/project-store.js';
-import { addService, removeService, updateService } from '../project/service-mutator.js';
-import type { AddServiceOptions } from '../project/service-mutator.js';
-import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
-import type { ScanComposeFilesOptions } from '../scanner/compose-file-scanner.js';
-import { parseComposeDocument } from '../yaml/compose-parser.js';
 import { inquirerPromptAdapter } from './inquirer-prompt-adapter.js';
 import { resolvePackageVersion } from './package-metadata.js';
-import { resolveComposeFilePath } from './project-resolver.js';
 
 export function createComposeCliProgram(): Command {
   const program = new Command();
@@ -40,7 +37,7 @@ function registerScanCommand(program: Command): void {
     .option('--json', 'output JSON')
     .option('--max-depth <depth>', 'maximum recursive depth', parseInteger)
     .action(async (root: string, options: { json?: boolean; maxDepth?: number }) => {
-      const projects = await scanComposeFiles(root, createScanComposeFilesOptions(options.maxDepth));
+      const projects = await scanComposeProjects({ root, ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }) });
 
       if (options.json === true) {
         console.log(JSON.stringify(projects, null, 2));
@@ -68,7 +65,7 @@ function registerSelectCommand(program: Command): void {
     .command('select')
     .argument('[root]', 'root directory to scan', '.')
     .action(async (root: string) => {
-      const projects = await scanComposeFiles(root);
+      const projects = await scanComposeProjects({ root });
 
       if (projects.length === 0) {
         console.log('No Docker Compose projects found.');
@@ -191,9 +188,7 @@ function registerComposeExecutionCommands(program: Command): void {
     .option('--volumes', 'print volume names')
     .option('--profiles', 'print profile names')
     .option('--format <format>', 'output format')
-    .action(async (options: ComposeCliOptions & { services?: boolean; profiles?: boolean }) =>
-      runSimpleComposeCommand('config', [], createConfigComposeCliOptions(options)),
-    );
+    .action(async (options: ComposeCliOptions) => runSimpleComposeCommand('config', [], createConfigComposeCliOptions(options)));
 
   addComposeCommand(program, 'cp')
     .argument('<source>', 'source path')
@@ -263,7 +258,11 @@ function registerProjectCommands(program: Command): void {
     .option('--name <name>', 'Compose project name')
     .option('--overwrite', 'overwrite an existing compose.yaml')
     .action(async (directory: string, options: { name?: string; overwrite?: boolean }) => {
-      const created = await createComposeProject(directory, createComposeProjectOptions(options));
+      const created = await createComposeProjectApplication({
+        directory,
+        ...(options.name === undefined ? {} : { name: options.name }),
+        ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+      });
       console.log(`Created ${created.composeFilePath}`);
     });
 
@@ -279,23 +278,8 @@ function registerProjectCommands(program: Command): void {
     .option('--depends-on <service...>', 'dependencies')
     .option('--overwrite', 'overwrite an existing service')
     .action(async (service: string, options: ProjectServiceCliOptions) => {
-      const composeFilePath = await resolveComposeFilePath(options.project);
-      const projectModel = await loadComposeProject(composeFilePath);
-      projectModel.document = addService(
-        projectModel.document,
-        service,
-        {
-          ...(options.image === undefined ? {} : { image: options.image }),
-          ...(options.build === undefined ? {} : { build: options.build }),
-          ...(options.port === undefined ? {} : { ports: options.port }),
-          ...(options.volume === undefined ? {} : { volumes: options.volume }),
-          ...(options.env === undefined ? {} : { environment: toEnvironmentRecord(options.env) }),
-          ...(options.dependsOn === undefined ? {} : { depends_on: options.dependsOn }),
-        },
-        createAddServiceOptions(options.overwrite),
-      );
-      await saveComposeProject(projectModel);
-      console.log(`Updated ${projectModel.composeFilePath}`);
+      const updated = await addComposeProjectService(createComposeProjectServiceInput(service, options));
+      console.log(`Updated ${updated.composeFilePath}`);
     });
 
   project
@@ -303,11 +287,8 @@ function registerProjectCommands(program: Command): void {
     .argument('<service>', 'service name')
     .requiredOption('--project <path>', 'project directory or Compose file')
     .action(async (service: string, options: { project: string }) => {
-      const composeFilePath = await resolveComposeFilePath(options.project);
-      const projectModel = await loadComposeProject(composeFilePath);
-      projectModel.document = removeService(projectModel.document, service);
-      await saveComposeProject(projectModel);
-      console.log(`Updated ${projectModel.composeFilePath}`);
+      const updated = await removeComposeProjectService({ projectPath: options.project, service });
+      console.log(`Updated ${updated.composeFilePath}`);
     });
 
   project
@@ -317,23 +298,16 @@ function registerProjectCommands(program: Command): void {
     .option('--image <image>', 'service image')
     .option('--build <path>', 'build context')
     .action(async (service: string, options: ProjectServiceCliOptions) => {
-      const composeFilePath = await resolveComposeFilePath(options.project);
-      const projectModel = await loadComposeProject(composeFilePath);
-      projectModel.document = updateService(projectModel.document, service, {
-        ...(options.image === undefined ? {} : { image: options.image }),
-        ...(options.build === undefined ? {} : { build: options.build }),
-      });
-      await saveComposeProject(projectModel);
-      console.log(`Updated ${projectModel.composeFilePath}`);
+      const updated = await updateComposeProjectService(createUpdateComposeProjectServiceInput(service, options));
+      console.log(`Updated ${updated.composeFilePath}`);
     });
 
   project
     .command('validate')
     .requiredOption('--project <path>', 'project directory or Compose file')
     .action(async (options: { project: string }) => {
-      const composeFilePath = await resolveComposeFilePath(options.project);
-      await parseComposeDocument(composeFilePath);
-      console.log(`Valid Compose file: ${composeFilePath}`);
+      const result = await validateComposeProject({ projectPath: options.project });
+      console.log(`Valid Compose file: ${result.composeFilePath}`);
     });
 }
 
@@ -357,70 +331,42 @@ async function runSimpleComposeCommand(
   options: ComposeCliOptions,
   passthroughArgs: string[] = [],
 ): Promise<void> {
-  const composeFilePath = await resolveComposeFilePath(options.project, options.file);
-  const availableServices = await getAvailableServicesForGuidance(composeFilePath, options.guided === true);
-  const guided = await resolveGuidedCommand(
-    {
-      command,
-      options,
-      services,
-      passthroughArgs,
-      availableServices,
-    },
-    inquirerPromptAdapter,
-  );
-
   await executeAndPrint({
     command,
-    composeFilePath,
-    services: guided.services,
-    passthroughArgs: guided.passthroughArgs,
-    options: guided.options,
+    services,
+    passthroughArgs,
+    options,
   });
 }
 
 async function executeAndPrint(request: {
   command: ComposeSubCommand;
-  composeFilePath: string;
+  composeFilePath?: string;
   services: string[];
   passthroughArgs: string[];
   options: ComposeCliOptions;
 }): Promise<void> {
-  const executionRequest = {
-    composeFilePath: request.composeFilePath,
-    workingDirectory: dirname(request.composeFilePath),
-    command: request.command,
-    services: request.services,
-    passthroughArgs: request.passthroughArgs,
-    options: request.options,
-  };
+  const result = await executeComposeApplicationCommand(
+    {
+      command: request.command,
+      services: request.services,
+      options: request.options,
+      passthroughArgs: request.passthroughArgs,
+      ...(request.composeFilePath === undefined ? {} : { composeFilePath: request.composeFilePath }),
+    },
+    { prompts: inquirerPromptAdapter },
+  );
 
-  if (request.options.dryRun === true) {
-    console.log(buildComposeCommand(executionRequest).displayCommand);
-    return;
+  if (result.dryRun) {
+    console.log(result.command);
   }
-
-  const result = await executeComposeCommand(executionRequest);
 
   if (result.exitCode !== 0) {
     process.exitCode = result.exitCode;
   }
 }
 
-async function getAvailableServicesForGuidance(composeFilePath: string, guided: boolean): Promise<string[]> {
-  if (!guided) {
-    return [];
-  }
-
-  try {
-    const document = await parseComposeDocument(composeFilePath);
-    return Object.keys(document.services).sort();
-  } catch {
-    return [];
-  }
-}
-
-function createConfigComposeCliOptions(options: ComposeCliOptions & { services?: boolean; profiles?: boolean }): ComposeCliOptions {
+function createConfigComposeCliOptions(options: ComposeCliOptions): ComposeCliOptions {
   return {
     ...options,
     ...(options.services === undefined ? {} : { servicesOnly: options.services }),
@@ -429,19 +375,27 @@ function createConfigComposeCliOptions(options: ComposeCliOptions & { services?:
   };
 }
 
-function createScanComposeFilesOptions(maxDepth: number | undefined): ScanComposeFilesOptions {
-  return maxDepth === undefined ? {} : { maxDepth };
-}
-
-function createComposeProjectOptions(options: { name?: string; overwrite?: boolean }): CreateComposeProjectOptions {
+function createComposeProjectServiceInput(service: string, options: ProjectServiceCliOptions): ComposeProjectServiceInput {
   return {
-    ...(options.name === undefined ? {} : { name: options.name }),
+    projectPath: options.project,
+    service,
+    ...(options.image === undefined ? {} : { image: options.image }),
+    ...(options.build === undefined ? {} : { build: options.build }),
+    ...(options.port === undefined ? {} : { ports: options.port }),
+    ...(options.volume === undefined ? {} : { volumes: options.volume }),
+    ...(options.env === undefined ? {} : { environment: options.env }),
+    ...(options.dependsOn === undefined ? {} : { dependsOn: options.dependsOn }),
     ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
   };
 }
 
-function createAddServiceOptions(overwrite: boolean | undefined): AddServiceOptions {
-  return overwrite === undefined ? {} : { overwrite };
+function createUpdateComposeProjectServiceInput(service: string, options: ProjectServiceCliOptions): UpdateComposeProjectServiceInput {
+  return {
+    projectPath: options.project,
+    service,
+    ...(options.image === undefined ? {} : { image: options.image }),
+    ...(options.build === undefined ? {} : { build: options.build }),
+  };
 }
 
 function parseInteger(value: string): number {
@@ -454,60 +408,9 @@ function parseInteger(value: string): number {
   return parsedValue;
 }
 
-function toEnvironmentRecord(entries: string[]): Record<string, string> {
-  return Object.fromEntries(
-    entries.map((entry) => {
-      const separatorIndex = entry.indexOf('=');
-
-      if (separatorIndex < 1) {
-        throw new Error(`Invalid environment entry: ${entry}`);
-      }
-
-      return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)];
-    }),
-  );
-}
-
-type ComposeCliOptions = {
-  project?: string;
-  file?: string;
-  projectName?: string;
-  profile?: string[];
-  dryRun?: boolean;
-  noAnsi?: boolean;
-  guided?: boolean;
-  yes?: boolean;
-  interactive?: boolean;
-  detach?: boolean;
-  removeOrphans?: boolean;
-  volumes?: boolean;
-  build?: boolean;
-  noBuild?: boolean;
-  noCache?: boolean;
-  pull?: boolean;
-  follow?: boolean;
-  tail?: string;
-  scale?: string[];
-  rm?: boolean;
-  force?: boolean;
-  stop?: boolean;
-  timeout?: string;
-  signal?: string;
-  all?: boolean;
-  quiet?: boolean;
-  format?: string;
-  json?: boolean;
-  noInterpolate?: boolean;
-  servicesOnly?: boolean;
-  volumesOnly?: boolean;
-  profilesOnly?: boolean;
+type ComposeCliOptions = ComposeApplicationCommandOptions & {
   services?: boolean;
   profiles?: boolean;
-  short?: boolean;
-  noUp?: boolean;
-  env?: string[];
-  user?: string;
-  workdir?: string;
 };
 
 type ProjectServiceCliOptions = {

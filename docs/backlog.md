@@ -50,6 +50,7 @@ The following capabilities are already implemented or release-hardened:
 - Smoke tests and npm pack dry-run.
 - Release workflow with npm Trusted Publishing.
 - Post-publication npm install verification.
+- GUI roadmap and CLI-first product backlog.
 
 ## Priority backlog
 
@@ -74,7 +75,7 @@ Acceptance criteria:
 - `docs/gui-roadmap.md` states the GUI architecture, security posture and technology direction.
 - The next implementation steps are explicit and ordered.
 
-Status: in progress through PR #19.
+Status: completed in PR #19.
 
 ### P1 — Reusable application services
 
@@ -84,8 +85,9 @@ As a future GUI developer, I can call reusable application services instead of d
 
 Tasks:
 
-- Introduce or formalize `src/app` as the shared application service layer.
-- Extract scan, runtime, doctor, workspace, favorite, command preview and command execution use cases.
+- Introduce `src/app` as the shared application service layer.
+- Extract scan, doctor, workspace, favorite, command preview, command execution and project mutation use cases.
+- Route CLI commands through application services.
 - Keep Commander and Inquirer dependencies in the CLI adapter.
 - Keep Docker Compose command generation in the existing `compose` module.
 - Add direct tests for application services.
@@ -94,10 +96,10 @@ Acceptance criteria:
 
 - CLI commands delegate to reusable application services.
 - Application services do not import Commander or Inquirer.
-- A future GUI can scan projects, read diagnostics and preview commands through the same service layer.
+- A future GUI can scan projects, read diagnostics, manage workspaces and preview commands through the same service layer.
 - Existing CLI behaviour is preserved.
 
-Candidate PR: `refactor: formalize reusable application services`.
+Status: in progress through PR #20.
 
 ### P1 — Doctor hardening
 

@@ -26,6 +26,8 @@ type WidgetState = {
   status: string;
 };
 
+const collapsedPreferenceKey = 'compose-ui.live-streams.collapsed';
+
 export function mountStreamingWidget(token: string): void {
   if (token.length === 0 || document.getElementById('compose-streaming-widget') !== null) {
     return;
@@ -33,7 +35,7 @@ export function mountStreamingWidget(token: string): void {
 
   const root = document.createElement('section');
   root.id = 'compose-streaming-widget';
-  root.className = 'streaming-widget collapsed';
+  root.className = readCollapsedPreference() ? 'streaming-widget collapsed' : 'streaming-widget';
   document.body.append(root);
 
   const state: WidgetState = {
@@ -60,6 +62,14 @@ export function mountStreamingWidget(token: string): void {
     closeRuntimeStream();
     closeLogStream();
     state.status = 'Streams stopped';
+    render();
+  }
+
+  function closePanel(): void {
+    closeRuntimeStream();
+    closeLogStream();
+    state.status = 'Panel closed';
+    setCollapsed(true);
     render();
   }
 
@@ -107,6 +117,7 @@ export function mountStreamingWidget(token: string): void {
       return;
     }
 
+    setCollapsed(false);
     closeRuntimeStream();
     const params = new URLSearchParams({ token, stackId: stack.id, intervalMs: '5000' });
     const source = new EventSource(`/api/events/runtime?${params.toString()}`);
@@ -139,6 +150,7 @@ export function mountStreamingWidget(token: string): void {
       return;
     }
 
+    setCollapsed(false);
     closeLogStream();
     const params = new URLSearchParams({ token, stackId: stack.id, tail: '200' });
 
@@ -179,7 +191,12 @@ export function mountStreamingWidget(token: string): void {
   }
 
   function toggle(): void {
-    root.classList.toggle('collapsed');
+    setCollapsed(!root.classList.contains('collapsed'));
+  }
+
+  function setCollapsed(collapsed: boolean): void {
+    root.classList.toggle('collapsed', collapsed);
+    writeCollapsedPreference(collapsed);
   }
 
   function render(): void {
@@ -188,10 +205,13 @@ export function mountStreamingWidget(token: string): void {
 
     root.innerHTML = `
       <button class="streaming-widget-toggle" type="button">Live streams</button>
-      <div class="streaming-widget-panel">
+      <div class="streaming-widget-panel" role="dialog" aria-label="Live streams">
         <div class="streaming-widget-header">
-          <strong>Live streams</strong>
-          <small>${escapeHtml(state.status)}</small>
+          <div class="streaming-widget-title">
+            <strong>Live streams</strong>
+            <small>${escapeHtml(state.status)}</small>
+          </div>
+          <button class="streaming-widget-close" type="button" data-action="close" aria-label="Close Live streams panel">×</button>
         </div>
         <label>
           Stack
@@ -217,6 +237,7 @@ export function mountStreamingWidget(token: string): void {
     `;
 
     root.querySelector<HTMLButtonElement>('.streaming-widget-toggle')?.addEventListener('click', toggle);
+    root.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener('click', closePanel);
     root.querySelector<HTMLSelectElement>('[data-role="stack"]')?.addEventListener('change', (event) => {
       state.selectedStackId = event.currentTarget.value;
       state.selectedService = '';
@@ -233,6 +254,13 @@ export function mountStreamingWidget(token: string): void {
     root.querySelector<HTMLButtonElement>('[data-action="stop"]')?.addEventListener('click', closeStreams);
   }
 
+  function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && !root.classList.contains('collapsed')) {
+      closePanel();
+    }
+  }
+
+  window.addEventListener('keydown', handleKeydown);
   window.addEventListener('beforeunload', closeStreams);
   render();
   void loadStacks();
@@ -243,6 +271,22 @@ function readSse<T>(event: Event): T | undefined {
     return JSON.parse((event as MessageEvent).data as string) as T;
   } catch {
     return undefined;
+  }
+}
+
+function readCollapsedPreference(): boolean {
+  try {
+    return window.sessionStorage.getItem(collapsedPreferenceKey) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function writeCollapsedPreference(collapsed: boolean): void {
+  try {
+    window.sessionStorage.setItem(collapsedPreferenceKey, collapsed ? 'true' : 'false');
+  } catch {
+    // Ignore storage failures. The widget still works without persistence.
   }
 }
 

@@ -8,7 +8,7 @@ Candidate version: `v0.2.0`.
 
 Package version in this release branch: `0.2.0`.
 
-This release preparation PR updates package metadata, changelog and release notes. It does not tag or publish the npm package automatically.
+This release preparation does not tag or publish the npm package automatically.
 
 ## Release scope
 
@@ -27,6 +27,7 @@ Included milestones:
 - PR #27 — local UI rendering fix for invalid generated JavaScript.
 - PR #28 — release readiness and roadmap alignment.
 - PR #29 — `v0.2.0` release metadata, changelog and release notes.
+- PR #30 — bundled local GUI asset pipeline.
 
 ## Release blockers
 
@@ -39,6 +40,8 @@ Before publishing, confirm:
 - `docs/releases/v0.2.0.md` exists and can be used as the GitHub release body.
 - CI is green on the release PR.
 - `npm pack --dry-run` contains `dist`, `README.md`, `CHANGELOG.md` and `docs`.
+- `npm run build` produces `dist/cli` and `dist/ui`.
+- The local UI `index.html` does not depend on browser imports from `https://esm.sh`.
 - The release workflow still uses npm Trusted Publishing.
 - Post-publication validation still installs the exact package version and runs smoke checks.
 
@@ -70,6 +73,7 @@ compose --version
 compose doctor --skip-docker
 compose scan . --max-depth 4
 compose browse --filter api --sort runtime
+compose ui --skip-docker --no-open
 ```
 
 For Windows-specific command discovery, verify that `compose doctor` still reports npm global prefix and PATH diagnostics.
@@ -88,6 +92,8 @@ Open the generated tokenized URL and verify:
 
 - The page is not blank before React mounts.
 - Browser console has no `Invalid or unexpected token` error.
+- Browser network requests for UI code are local `/assets/*` requests.
+- Browser console does not show failed requests to `https://esm.sh`.
 - Doctor diagnostics render.
 - Workspaces render.
 - Stacks render.
@@ -96,21 +102,16 @@ Open the generated tokenized URL and verify:
 - Execution remains disabled until explicit confirmation.
 - `down`, `kill` and `rm` require destructive confirmation.
 
-## Known limitation for v0.2.0
+## UI asset decision for v0.2.0
 
-The current React MVP still uses browser ESM imports for React. In environments where that external source is blocked by proxy, TLS inspection or offline usage, the React app can fail to mount.
-
-This limitation is documented and partially mitigated by a visible loading fallback. The durable fix is the follow-up GUI asset pipeline:
+The previous React MVP browser ESM limitation has been resolved for the release branch. The UI is built into local package assets:
 
 ```text
-build: bundle local GUI assets
+dist/ui/index.html
+dist/ui/assets/*
 ```
 
-Release preparation decision for this PR:
-
-- Prepare `v0.2.0` with the limitation documented.
-- Keep npm publication manual.
-- Prefer completing bundled assets before broad non-technical user testing.
+If those assets are missing in a source checkout, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.
 
 ## GitHub release body
 
@@ -126,6 +127,7 @@ compose --version
 compose doctor --skip-docker
 compose scan . --max-depth 4
 compose browse --filter api --sort runtime
+compose ui --skip-docker --no-open
 ```
 
 If the release workflow is run with `publish=true`, the repository's post-publication validation should already perform the exact-version install and basic CLI checks.

@@ -21,17 +21,13 @@
     "docs"
   ],
   "scripts": {
-    "build": "npm run build:cli && npm run build:ui",
-    "build:cli": "tsc -p tsconfig.json",
-    "build:ui": "vite build --config ui/vite.config.ts",
+    "build": "tsc -p tsconfig.json",
     "clean": "node -e \"import('node:fs/promises').then(fs => fs.rm('dist', { recursive: true, force: true }))\"",
     "lint": "eslint .",
     "start": "node dist/cli/index.js",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "typecheck": "npm run typecheck:cli && npm run typecheck:ui",
-    "typecheck:cli": "tsc --noEmit",
-    "typecheck:ui": "tsc --project ui/tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit",
     "audit": "npm audit --audit-level=moderate",
     "smoke": "node scripts/smoke-test.mjs",
     "pack:dry-run": "npm pack --dry-run",
@@ -50,16 +46,10 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.0.4",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.7.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.65.0",
-    "vite": "^8.1.5",
     "vitest": "^4.1.9"
   },
   "keywords": [

@@ -15,6 +15,7 @@ The project follows a pragmatic semver policy:
 - Local UI workspace management: create saved workspaces, update an existing workspace path, select the current workspace and remove saved workspaces from `compose ui`.
 - Token-protected local workspace mutation endpoints used by the browser UI.
 - Token-protected Server-Sent Events endpoints for selected stack runtime updates and live Docker Compose log streaming in `compose ui`.
+- Normalized Docker Compose execution diagnostics for unavailable Docker, missing Compose files and non-zero Docker Compose failures.
 
 ### Changed
 
@@ -23,10 +24,12 @@ The project follows a pragmatic semver policy:
 - The local UI now exposes a live streams panel for runtime status and `docker compose logs --follow` output.
 - The Live streams panel now follows the selected stack from the Stacks view and clears old stream output when the stack changes.
 - Scrollable stack and live-output panels now use themed scrollbars aligned with the local UI design.
+- Docker Compose command results now carry structured diagnostic metadata while keeping the generated command, working directory, Compose file path, exit code, stdout and stderr available.
 
 ### Fixed
 
 - The Live streams panel can now be closed from its header or with Escape, and active streams are stopped before the panel collapses.
+- Terminal execution now prints actionable diagnostics for common Docker Compose command failures when using the default Docker runner.
 
 ## 0.2.0 - Local UI, reusable services and large workspace hardening
 

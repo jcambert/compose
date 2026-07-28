@@ -32,6 +32,7 @@ describe('executeComposeCommand', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`docker compose -f ${composeFilePath} ps`);
     expect(result.stderr).toBe('');
+    expect(result.diagnostic).toBeUndefined();
   });
 
   it('runs the generated docker compose command through the provided process runner', async () => {
@@ -60,11 +61,68 @@ describe('executeComposeCommand', () => {
         options: { cwd: '/workspace/app' },
       },
     ]);
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       command: `docker compose -f ${composeFilePath} logs --follow api`,
       exitCode: 3,
       stdout: 'out',
       stderr: 'err',
+      diagnostic: {
+        kind: 'compose-command-failed',
+        command: `docker compose -f ${composeFilePath} logs --follow api`,
+        workingDirectory: '/workspace/app',
+        composeFilePath,
+        exitCode: 3,
+      },
+    });
+  });
+
+  it('returns a docker-unavailable diagnostic when the process runner cannot start docker', async () => {
+    const result = await executeComposeCommand(
+      {
+        composeFilePath,
+        command: 'ps',
+        services: [],
+        passthroughArgs: [],
+        options: {},
+      },
+      async () => {
+        const error = new Error('spawn docker ENOENT') as Error & { code: string };
+        error.code = 'ENOENT';
+        throw error;
+      },
+    );
+
+    expect(result.exitCode).toBe(127);
+    expect(result.diagnostic).toMatchObject({
+      kind: 'docker-unavailable',
+      title: 'Docker is not available.',
+      workingDirectory: '/workspace/app',
+      composeFilePath,
+    });
+    expect(result.diagnostic?.hints).toContain('Run compose doctor for local installation diagnostics.');
+  });
+
+  it('returns a compose-file-missing diagnostic when docker cannot read the compose file', async () => {
+    const result = await executeComposeCommand(
+      {
+        composeFilePath,
+        command: 'ps',
+        services: [],
+        passthroughArgs: [],
+        options: {},
+      },
+      async () => ({
+        exitCode: 14,
+        stdout: '',
+        stderr: `stat ${composeFilePath}: no such file or directory`,
+      }),
+    );
+
+    expect(result.diagnostic).toMatchObject({
+      kind: 'compose-file-missing',
+      title: 'Compose file was not found.',
+      composeFilePath,
+      exitCode: 14,
     });
   });
 });

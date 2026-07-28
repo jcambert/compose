@@ -62,6 +62,7 @@ Main areas:
 - Stack browser with client-side search and sorting.
 - Stack detail panel with services, runtime status, ports and container names when available.
 - Command workflow with a clear preview, confirmation and execution sequence.
+- Command execution diagnostics for unavailable Docker, missing Compose files and non-zero Docker Compose failures.
 - Live streams panel for runtime updates and Docker Compose logs.
 - Professional loading, empty and error states.
 
@@ -99,7 +100,7 @@ Content-Type: application/json
 
 {
   "name": "dev",
-  "path": "C:\\Sources"
+  "path": "C:\Sources"
 }
 ```
 
@@ -166,7 +167,7 @@ Content-Type: application/json
 
 {
   "command": "ps",
-  "composeFilePath": "C:\\Sources\\infra\\compose.yaml",
+  "composeFilePath": "C:\Sources\infra\compose.yaml",
   "services": [],
   "options": {}
 }
@@ -177,9 +178,9 @@ The response is the generated Docker Compose command model:
 ```json
 {
   "binary": "docker",
-  "args": ["compose", "-f", "C:\\Sources\\infra\\compose.yaml", "ps"],
-  "cwd": "C:\\Sources\\infra",
-  "displayCommand": "docker compose -f C:\\Sources\\infra\\compose.yaml ps"
+  "args": ["compose", "-f", "C:\Sources\infra\compose.yaml", "ps"],
+  "cwd": "C:\Sources\infra",
+  "displayCommand": "docker compose -f C:\Sources\infra\compose.yaml ps"
 }
 ```
 
@@ -190,7 +191,7 @@ Execution requires explicit confirmation:
 ```json
 {
   "command": "ps",
-  "composeFilePath": "C:\\Sources\\infra\\compose.yaml",
+  "composeFilePath": "C:\Sources\infra\compose.yaml",
   "services": [],
   "options": {},
   "confirmed": true
@@ -202,7 +203,7 @@ Destructive commands require an additional flag:
 ```json
 {
   "command": "down",
-  "composeFilePath": "C:\\Sources\\infra\\compose.yaml",
+  "composeFilePath": "C:\Sources\infra\compose.yaml",
   "services": [],
   "options": {},
   "confirmed": true,
@@ -217,6 +218,23 @@ down
 kill
 rm
 ```
+
+Execution responses keep the generated command, exit code, stdout and stderr. Failed executions can also include a `diagnostic` object:
+
+```text
+kind
+title
+message
+command
+workingDirectory
+composeFilePath
+exitCode
+hints
+stdout
+stderr
+```
+
+The diagnostic model is shared with the CLI execution path and currently covers unavailable Docker, missing Compose files and generic non-zero Docker Compose command failures. See [`docs/compose-error-reporting.md`](compose-error-reporting.md) for details.
 
 The browser UI makes this flow explicit: preview first, normal confirmation second, destructive confirmation third when the selected command requires it. Live streams are read-only and do not bypass command confirmation rules.
 
@@ -233,9 +251,10 @@ Current constraints:
 - no unauthenticated API route
 - workspace mutation endpoints stay token-protected and local-only
 - streaming endpoints stay token-protected and read-only
+- command diagnostics are read-only and preserve raw Docker Compose output
 - destructive command execution requires explicit confirmation data
 - command preview is shown before execution
 
 ## Next step
 
-The next GUI hardening step is richer Docker Compose error reporting for both terminal and local UI flows.
+The next project step is preparing the post-`v0.2.0` release, likely `v0.2.1`.

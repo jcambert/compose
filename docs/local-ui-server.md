@@ -52,6 +52,14 @@ The UI does not duplicate Docker Compose command generation. It posts command re
 
 The MVP keeps the implementation intentionally light and dependency-free for the npm package. It uses browser ESM imports for React while the backend, safety model and API contract are stabilized. A later packaging step can replace this with a bundled offline asset pipeline without changing the API contract.
 
+The root page includes a visible fallback inside `#root` before React mounts. This avoids a fully blank page when browser JavaScript fails before the React app starts.
+
+## Known MVP limitation
+
+The current React MVP still depends on browser access to the React ESM imports used by the generated page. This means `compose ui` can still fail to render the React app in browsers that cannot reach or trust that external source.
+
+This is an accepted MVP limitation only while the API and UX contract are being stabilized. The follow-up asset pipeline must remove this runtime browser dependency by serving local bundled assets from the npm package.
+
 ## Endpoints
 
 ```text
@@ -159,4 +167,4 @@ Current constraints:
 
 ## Next step
 
-The next GUI step is to improve the local UI with bundled assets, filtering, richer service details and eventually streaming logs/runtime updates through Server-Sent Events.
+The next GUI hardening step is to bundle local UI assets so `compose ui` can render without downloading browser dependencies. Filtering, richer service details and streaming logs/runtime updates can follow without changing the local API safety model.

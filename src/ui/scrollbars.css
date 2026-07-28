@@ -1,0 +1,39 @@
+.scroll-panel,
+.streaming-widget-output,
+.sidebar,
+.sidebar-nav {
+  scrollbar-color: rgba(96, 165, 250, .55) rgba(15, 23, 42, .55);
+  scrollbar-width: thin;
+}
+
+.scroll-panel::-webkit-scrollbar,
+.streaming-widget-output::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.sidebar-nav::-webkit-scrollbar {
+  width: .7rem;
+  height: .7rem;
+}
+
+.scroll-panel::-webkit-scrollbar-track,
+.streaming-widget-output::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track,
+.sidebar-nav::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .55);
+}
+
+.scroll-panel::-webkit-scrollbar-thumb,
+.streaming-widget-output::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb,
+.sidebar-nav::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(15, 23, 42, .55);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(96, 165, 250, .78), rgba(37, 99, 235, .66));
+}
+
+.scroll-panel::-webkit-scrollbar-thumb:hover,
+.streaming-widget-output::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover,
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(125, 211, 252, .9), rgba(59, 130, 246, .82));
+}

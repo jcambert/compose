@@ -17,6 +17,7 @@ The project follows a pragmatic semver policy:
 - Local configuration management commands: `compose config path`, `compose config export`, `compose config import` and `compose config reset`.
 - Optional local UI server launched with `compose ui`, bound to `127.0.0.1`, protected by a short-lived token and backed by the same application services as the CLI.
 - React-based local UI MVP for doctor diagnostics, workspaces, stacks, stack details, runtime summary, command preview and command execution result display.
+- Bundled local UI asset pipeline that builds React with Vite into `dist/ui` for npm packaging.
 - Terminal browser filtering and sorting through `compose browse --filter <text>` and `compose browse --sort name|path|services|runtime`.
 - Scanner exclusions, symbolic link skipping, traversal guard rails and `compose scan --exclude`, `--max-directories` and `--max-entries` options for large source folders.
 - Release readiness documentation for the `v0.2.0` publication process.
@@ -26,17 +27,19 @@ The project follows a pragmatic semver policy:
 - CLI commands now delegate more behaviour through reusable application services while keeping Commander and prompt handling in the CLI adapter.
 - Scanner warnings can be surfaced without polluting `compose scan --json` stdout.
 - The local UI keeps command execution behind explicit preview and confirmation flows, with stronger confirmation for destructive commands.
+- `compose ui` now serves bundled `dist/ui/index.html` and `/assets/*` files instead of browser ESM imports from an external CDN.
 - Product backlog and GUI roadmap now reflect the CLI-first direction and the delivered optional local UI milestones.
 
 ### Fixed
 
 - `compose ui` no longer serves invalid generated JavaScript for command execution output containing newline joins.
 - The local UI root now includes a visible loading fallback so a browser page is not completely blank before React mounts.
+- The local UI no longer depends on access to `esm.sh` or another browser-side React CDN at runtime.
 - Scanner traversal now avoids common generated, dependency-heavy, IDE and cache directories by default.
 
 ### Notes
 
-The React MVP still uses browser ESM imports for React. Environments that block the external browser import source can prevent the React app from mounting. This limitation is documented in `docs/local-ui-server.md` and `docs/release-readiness.md`; the follow-up durable fix is the bundled local GUI asset pipeline.
+The local UI is still intentionally lightweight and CLI-first. It is now bundled with the npm package, while richer service details and log/runtime streaming remain follow-up GUI improvements.
 
 ## 0.1.2 - CLI package metadata fix
 

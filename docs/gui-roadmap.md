@@ -52,7 +52,9 @@ The preferred implementation path is:
 
 The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic port by default and protects the session with a short-lived local token.
 
-The React UI is now bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
+The React UI is bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
+
+The current UI is organized as a professional local admin console with Dashboard, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.
 
 ## Architectural rule
 
@@ -111,28 +113,11 @@ The `app` modules are introduced incrementally, not through a large rewrite.
 
 Document the GUI direction, product boundaries, technology choice and backlog order.
 
-Expected output:
-
-- `docs/gui-roadmap.md`
-- updated `docs/backlog.md`
-
 Status: completed in PR #19.
 
 ### Step 2 — Formalize reusable application services
 
 Extract and stabilize application services that can be called by both the CLI and the future GUI.
-
-Current services:
-
-```text
-src/app/scan-service.ts
-src/app/doctor-service.ts
-src/app/workspace-service.ts
-src/app/stack-browser-service.ts
-src/app/project-service.ts
-src/app/compose-command-service.ts
-src/app/compose-file-resolver.ts
-```
 
 Acceptance criteria:
 
@@ -270,9 +255,34 @@ Acceptance criteria:
 
 Status: completed in PR #30.
 
+### Step 9 — Improve local UI user experience and professional layout
+
+Move the bundled UI from a functional MVP toward a polished local admin console.
+
+Delivered behaviours:
+
+- Sidebar navigation with Dashboard, Stacks, Doctor and Commands sections.
+- Professional top bar with workspace, local server status and refresh action.
+- Dashboard summary cards for stack count, service count, doctor status and selected runtime.
+- Stack browser with client-side search and sorting.
+- Stack detail panel with service cards, runtime state, exposed ports and container names when available.
+- Command workflow split into preview, confirmation and execution stages.
+- Clear danger-zone messaging for destructive commands.
+- Loading skeletons, empty states and error states.
+- Responsive desktop/tablet layout.
+
+Acceptance criteria:
+
+- The GUI is easier to understand on first launch.
+- The command safety model remains unchanged.
+- The local API contract does not change.
+- The CLI remains fully usable without the GUI.
+
+Status: completed in PR #31.
+
 ## Next delivery plan
 
-### Step 9 — Add streaming for logs and runtime updates
+### Step 10 — Add streaming for logs and runtime updates
 
 Use Server-Sent Events for long-running output and status refreshes.
 
@@ -285,16 +295,16 @@ GET /api/logs/stream
 
 WebSocket support remains out of scope until a concrete bidirectional use case exists.
 
-### Step 10 — Improve GUI service details
+### Step 11 — Improve Docker Compose error reporting
 
-Improve the stack detail panel after streaming primitives are stable.
+Normalize common Docker and Docker Compose command failures for both CLI and UI display.
 
 Candidate behaviours:
 
-- richer service runtime cards
-- visible ports and container names
-- last command result history for the current session
-- manual refresh without losing selection state
+- show command, working directory, compose file path and exit code consistently
+- keep raw stdout/stderr available
+- add actionable hints for Docker unavailable, Compose file missing and non-zero command failures
+- reuse the same model in terminal and local UI flows
 
 ## Security and safety requirements
 
@@ -320,5 +330,5 @@ A GUI task should be rejected or postponed when it requires:
 
 - A separate command model.
 - A separate config format.
-- Desktop packaging before the local server MVP proves valuable.
+- Desktop packaging before the local server proves valuable.
 - Remote server behaviour without an explicit security design.

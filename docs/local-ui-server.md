@@ -1,4 +1,4 @@
-# Local UI Server and React GUI MVP
+# Local UI Server and React GUI
 
 `compose ui` starts an optional browser-based local interface from the CLI.
 
@@ -45,21 +45,25 @@ dist/ui/index.html
 dist/ui/assets/*
 ```
 
-Initial UI sections:
-
-- Doctor diagnostics
-- Workspace status
-- Stack list
-- Stack detail
-- Service runtime summary
-- Docker Compose command preview
-- Command execution result
-
-The UI does not duplicate Docker Compose command generation. It posts command requests to the local API, then displays the generated `docker compose` command before execution.
-
-The browser no longer downloads React from an external ESM/CDN source at runtime. `compose ui` serves the bundled `index.html` and `/assets/*` files from the npm package or from a local source build.
+The browser does not download React from an external ESM/CDN source at runtime. `compose ui` serves the bundled `index.html` and `/assets/*` files from the npm package or from a local source build.
 
 The root page includes a visible fallback inside `#root` before React mounts. If bundled assets are missing from a source checkout, the server returns a visible fallback page explaining that `npm run build` must be run.
+
+## Professional layout
+
+The local UI is now organized as a small admin console instead of a single technical page.
+
+Main areas:
+
+- Dashboard overview with workspace, stack, service, doctor and runtime summary cards.
+- Sidebar navigation for Dashboard, Stacks, Doctor and Commands.
+- Top bar showing the current workspace, local server state and refresh action.
+- Stack browser with client-side search and sorting.
+- Stack detail panel with services, runtime status, ports and container names when available.
+- Command workflow with a clear preview, confirmation and execution sequence.
+- Professional loading, empty and error states.
+
+The UI still does not duplicate Docker Compose command generation. It posts command requests to the local API, then displays the generated `docker compose` command before execution.
 
 ## Endpoints
 
@@ -152,6 +156,8 @@ kill
 rm
 ```
 
+The browser UI makes this flow explicit: preview first, normal confirmation second, destructive confirmation third when the selected command requires it.
+
 ## Safety constraints
 
 The local UI server must remain local-only until a separate remote security design exists.
@@ -168,4 +174,4 @@ Current constraints:
 
 ## Next step
 
-The next GUI hardening step is streaming logs/runtime updates through Server-Sent Events. Filtering and richer service details can follow without changing the local API safety model.
+The next GUI hardening step is streaming logs/runtime updates through Server-Sent Events. Richer command error reporting can follow without changing the local API safety model.

@@ -51,13 +51,14 @@ The root page includes a visible fallback inside `#root` before React mounts. If
 
 ## Professional layout
 
-The local UI is now organized as a small admin console instead of a single technical page.
+The local UI is organized as a small admin console instead of a single technical page.
 
 Main areas:
 
 - Dashboard overview with workspace, stack, service, doctor and runtime summary cards.
-- Sidebar navigation for Dashboard, Stacks, Doctor and Commands.
+- Sidebar navigation for Dashboard, Workspaces, Stacks, Doctor and Commands.
 - Top bar showing the current workspace, local server state and refresh action.
+- Workspace management with create, select-current and remove actions.
 - Stack browser with client-side search and sorting.
 - Stack detail panel with services, runtime status, ports and container names when available.
 - Command workflow with a clear preview, confirmation and execution sequence.
@@ -68,16 +69,57 @@ The UI still does not duplicate Docker Compose command generation. It posts comm
 ## Endpoints
 
 ```text
-GET  /api/health
-GET  /api/doctor
-GET  /api/workspaces
-GET  /api/stacks
-GET  /api/stacks/:id/runtime
-POST /api/commands/preview
-POST /api/commands/execute
+GET    /api/health
+GET    /api/doctor
+GET    /api/workspaces
+POST   /api/workspaces
+POST   /api/workspaces/current
+DELETE /api/workspaces/:name
+GET    /api/stacks
+GET    /api/stacks/:id/runtime
+POST   /api/commands/preview
+POST   /api/commands/execute
 ```
 
 `GET /api/doctor` skips Docker checks by default so `compose ui` can start even when Docker is not running. Use `?skipDocker=false` to request Docker diagnostics.
+
+## Workspace management
+
+The local UI can manage saved workspaces from the browser. The same local token protection applies to read and write endpoints.
+
+Create or update a workspace:
+
+```http
+POST /api/workspaces
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "dev",
+  "path": "C:\\Sources"
+}
+```
+
+Select the current workspace:
+
+```http
+POST /api/workspaces/current
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "dev"
+}
+```
+
+Remove a saved workspace:
+
+```http
+DELETE /api/workspaces/dev
+Authorization: Bearer <token>
+```
+
+Each mutation returns the refreshed workspace list so the browser can update its state and rescan stacks from the new current workspace.
 
 `GET /api/stacks` resolves the scan root in this order:
 
@@ -169,6 +211,7 @@ Current constraints:
 - no separate GUI command model
 - no broad filesystem API
 - no unauthenticated API route
+- workspace mutation endpoints stay token-protected and local-only
 - destructive command execution requires explicit confirmation data
 - command preview is shown before execution
 

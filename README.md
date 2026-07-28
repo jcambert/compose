@@ -286,11 +286,12 @@ The local UI:
 - binds to `127.0.0.1`
 - uses a dynamic free port by default
 - protects the browser session and API with a short-lived token
+- serves bundled React assets locally from `dist/ui`
 - shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews
 - requires explicit confirmation before command execution
 - requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`
 
-The current React MVP uses browser ESM imports for React. In restricted corporate, proxy or offline environments, those imports can be blocked. The page includes a visible loading fallback, and the planned durable fix is the bundled local GUI asset pipeline.
+The browser UI is built by `npm run build` and packaged with the npm CLI. The browser no longer needs to download React from an external CDN at runtime. In a source checkout where the UI assets are missing, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.
 
 See [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
 
@@ -314,6 +315,8 @@ compose up --project ./infra --guided --yes --dry-run
 
 - Node.js 20.19+
 - TypeScript
+- React for the optional local browser UI
+- Vite for bundled local UI assets
 - Commander for explicit command composition
 - `@inquirer/prompts` for interactive flows
 - `yaml` for Compose YAML parsing and writing
@@ -334,6 +337,7 @@ src/
   interactive/  interactive stack and service browsing workflows
   project/      project creation and service mutation
   scanner/      recursive Compose file discovery
+  ui/           bundled React UI source for compose ui
   workspace/    local workspaces, favorites and recent stack persistence
   yaml/         YAML parsing, validation and writing
 docs/

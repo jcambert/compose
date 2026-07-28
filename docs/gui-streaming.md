@@ -55,6 +55,13 @@ The local UI mounts a compact **Live streams** panel. It can:
 - start runtime streaming
 - start live logs
 - stop open streams
+- close the panel from the header or with `Escape`
+
+The panel stays collapsed by default and remembers its collapsed state in browser session storage. Closing the panel stops open runtime/log streams before collapsing it.
+
+When a stack is selected from the main **Stacks** view, the Live streams panel synchronizes to that stack by default. Changing the selected stack clears the existing stream output and stops the previous live streams so logs/runtime events do not mix across stacks.
+
+The stack list and live output use themed scrollbars that match the dark local UI visual design.
 
 This panel is a read-only companion to the existing command workflow. Command execution remains behind preview and confirmation.
 

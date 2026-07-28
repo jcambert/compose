@@ -34,13 +34,39 @@
 
 .streaming-widget-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.streaming-widget-header small {
+.streaming-widget-title {
+  display: grid;
+  gap: .15rem;
+  min-width: 0;
+}
+
+.streaming-widget-title small {
   color: #93c5fd;
+}
+
+.streaming-widget-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  background: rgba(15, 23, 42, .78);
+  color: #cbd5e1;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.streaming-widget-close:hover,
+.streaming-widget-close:focus-visible {
+  border-color: rgba(248, 113, 113, .5);
+  color: #fecaca;
 }
 
 .streaming-widget label {

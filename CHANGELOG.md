@@ -21,6 +21,12 @@ The project follows a pragmatic semver policy:
 - The local UI now treats workspace configuration as a first-class browser workflow instead of a read-only status panel.
 - Workspace management UI polished with compact forms, readable path chips, edit mode, less aggressive destructive actions and explicit remove confirmation.
 - The local UI now exposes a live streams panel for runtime status and `docker compose logs --follow` output.
+- The Live streams panel now follows the selected stack from the Stacks view and clears old stream output when the stack changes.
+- Scrollable stack and live-output panels now use themed scrollbars aligned with the local UI design.
+
+### Fixed
+
+- The Live streams panel can now be closed from its header or with Escape, and active streams are stopped before the panel collapses.
 
 ## 0.2.0 - Local UI, reusable services and large workspace hardening
 

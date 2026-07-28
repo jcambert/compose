@@ -5,6 +5,7 @@ import { mountStreamingWidget } from './streaming-widget';
 import './styles.css';
 import './workspace-polish.css';
 import './streaming.css';
+import './scrollbars.css';
 
 declare global {
   interface Window {

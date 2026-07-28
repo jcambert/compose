@@ -1,0 +1,36 @@
+name: Prepare v0.2.0 Lockfile
+
+on:
+  push:
+    branches:
+      - release/prepare-v020
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: release/prepare-v020
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Synchronize package lock version
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit package lock update
+        run: |
+          if git diff --quiet package-lock.json; then
+            echo "package-lock.json already synchronized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "release: sync package lock for v0.2.0"
+          git push origin release/prepare-v020

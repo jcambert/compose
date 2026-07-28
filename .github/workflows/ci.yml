@@ -25,9 +25,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          show-progress: false
+        run: |
+          git init -q .
+          git remote add origin https://github.com/jcambert/compose
+          git fetch -q --depth=1 origin "${GITHUB_SHA}"
+          git checkout -q FETCH_HEAD
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

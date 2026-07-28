@@ -4,8 +4,8 @@ import {
   apiGet,
   apiPost,
   type BuiltComposeCommand,
-  type ComposeExecutionResult,
   type CommandRequest,
+  type ComposeExecutionResult,
   type DiscoveredComposeProject,
   type DoctorReport,
   type StackListResult,
@@ -16,6 +16,10 @@ import {
 type AppProps = {
   token: string;
 };
+
+type AppView = 'dashboard' | 'stacks' | 'doctor' | 'commands';
+
+type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
 
 type LoadState = {
   loading: boolean;
@@ -43,13 +47,25 @@ type CommandFormState = {
   error?: string;
 };
 
+type DashboardSummary = {
+  stackCount: number;
+  serviceCount: number;
+  workspaceLabel: string;
+  doctorIssues: number;
+  runtimeLabel: string;
+  selectedStackLabel: string;
+};
+
 const commands = ['ps', 'up', 'down', 'logs', 'restart', 'stop', 'start', 'build', 'pull', 'kill', 'rm'];
 const destructiveCommands = new Set(['down', 'kill', 'rm']);
 
 export function App({ token }: AppProps) {
+  const [activeView, setActiveView] = useState<AppView>('dashboard');
   const [state, setState] = useState<LoadState>({ loading: true });
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
+  const [stackSearch, setStackSearch] = useState('');
+  const [stackSort, setStackSort] = useState<StackSortMode>('name');
   const [form, setForm] = useState<CommandFormState>({
     command: 'ps',
     serviceName: '',
@@ -57,13 +73,23 @@ export function App({ token }: AppProps) {
     destructiveConfirmed: false,
     busy: false,
   });
+
+  const projects = state.stacks?.stacks ?? [];
   const selectedProject = useMemo(
-    () => state.stacks?.stacks.find((project) => project.id === selectedId),
-    [state.stacks, selectedId],
+    () => projects.find((project) => project.id === selectedId),
+    [projects, selectedId],
+  );
+  const visibleProjects = useMemo(
+    () => sortProjects(filterProjects(projects, stackSearch), stackSort, selectedProject?.id),
+    [projects, selectedProject?.id, stackSearch, stackSort],
+  );
+  const summary = useMemo(
+    () => createDashboardSummary(state, selectedProject, runtime),
+    [runtime, selectedProject, state],
   );
 
   async function load() {
-    setState({ loading: true });
+    setState((current) => ({ ...current, loading: true, error: undefined }));
 
     try {
       const [health, doctor, workspaces, stacks] = await Promise.all([
@@ -74,40 +100,27 @@ export function App({ token }: AppProps) {
       ]);
 
       setState({ loading: false, health, doctor, workspaces, stacks });
-      setSelectedId((current) => current ?? stacks.stacks[0]?.id);
+      setSelectedId((current) => currentProjectOrFirst(current, stacks.stacks));
     } catch (error) {
       setState({ loading: false, error: error instanceof Error ? error.message : 'Unable to load compose data.' });
     }
   }
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  useEffect(() => {
-    if (selectedProject === undefined) {
+  async function refreshRuntime(project: DiscoveredComposeProject | undefined = selectedProject) {
+    if (project === undefined) {
       setRuntime({ loading: false });
       return;
     }
 
-    let cancelled = false;
     setRuntime({ loading: true });
-    apiGet<StackRuntimeStatus>(token, `/api/stacks/${encodeURIComponent(selectedProject.id)}/runtime`)
-      .then((status) => {
-        if (!cancelled) {
-          setRuntime({ loading: false, status });
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setRuntime({ loading: false, error: error instanceof Error ? error.message : 'Runtime unavailable.' });
-        }
-      });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProject, token]);
+    try {
+      const status = await apiGet<StackRuntimeStatus>(token, `/api/stacks/${encodeURIComponent(project.id)}/runtime`);
+      setRuntime({ loading: false, status });
+    } catch (error) {
+      setRuntime({ loading: false, error: error instanceof Error ? error.message : 'Runtime unavailable.' });
+    }
+  }
 
   async function preview() {
     const request = createRequest(selectedProject, form);
@@ -116,7 +129,15 @@ export function App({ token }: AppProps) {
       return;
     }
 
-    setForm((current) => ({ ...current, busy: true, error: undefined, preview: undefined, execution: undefined }));
+    setForm((current) => ({
+      ...current,
+      busy: true,
+      confirmed: false,
+      destructiveConfirmed: false,
+      error: undefined,
+      preview: undefined,
+      execution: undefined,
+    }));
 
     try {
       const result = await apiPost<BuiltComposeCommand>(token, '/api/commands/preview', request);
@@ -151,79 +172,458 @@ export function App({ token }: AppProps) {
     }
   }
 
+  useEffect(() => {
+    void load();
+  }, []);
+
+  useEffect(() => {
+    void refreshRuntime(selectedProject);
+  }, [selectedProject, token]);
+
   const destructive = destructiveCommands.has(form.command);
   const canExecute = form.preview !== undefined && form.confirmed && (!destructive || form.destructiveConfirmed);
 
   return (
-    <main className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">CLI-first · local-only · token-protected</p>
-          <h1>compose UI</h1>
-          <p className="muted">Bundled React UI for diagnostics, workspaces, stacks and safe Docker Compose command previews.</p>
-        </div>
-        <button className="secondary" type="button" onClick={() => void load()} disabled={state.loading}>
-          Refresh
-        </button>
-      </header>
-
-      {state.error === undefined ? null : <Banner tone="danger">{state.error}</Banner>}
-      {state.loading ? <Banner tone="info">Loading local compose data...</Banner> : null}
-
-      <section className="grid two-columns">
-        <DoctorPanel report={state.doctor} />
-        <WorkspacePanel workspaces={state.workspaces} health={state.health} />
-      </section>
-
-      <section className="grid two-columns wide-left">
-        <StackListPanel
-          stacks={state.stacks}
-          selectedId={selectedId}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setForm((current) => ({ ...current, serviceName: '', preview: undefined, execution: undefined, error: undefined }));
-          }}
+    <div className="app-frame">
+      <Sidebar activeView={activeView} setActiveView={setActiveView} summary={summary} />
+      <main className="app-shell">
+        <TopBar
+          loading={state.loading}
+          workspaceLabel={summary.workspaceLabel}
+          health={state.health}
+          onRefresh={() => void load()}
         />
-        <StackDetailPanel project={selectedProject} runtime={runtime} />
-      </section>
 
-      <CommandPanel
-        project={selectedProject}
-        form={form}
-        setForm={setForm}
-        destructive={destructive}
-        canExecute={canExecute}
-        preview={() => void preview()}
-        execute={() => void execute()}
-      />
-    </main>
+        {state.error === undefined ? null : <Banner tone="danger">{state.error}</Banner>}
+
+        {activeView === 'dashboard' ? (
+          <DashboardView
+            loading={state.loading}
+            summary={summary}
+            state={state}
+            runtime={runtime}
+            setActiveView={setActiveView}
+            onRefresh={() => void load()}
+          />
+        ) : null}
+
+        {activeView === 'stacks' ? (
+          <StacksView
+            stacks={state.stacks}
+            visibleProjects={visibleProjects}
+            selectedProject={selectedProject}
+            selectedId={selectedId}
+            runtime={runtime}
+            search={stackSearch}
+            sort={stackSort}
+            setSearch={setStackSearch}
+            setSort={setStackSort}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setActiveView('stacks');
+              clearCommandFeedback(setForm);
+            }}
+            onOpenCommands={() => setActiveView('commands')}
+            onRefreshRuntime={() => void refreshRuntime()}
+          />
+        ) : null}
+
+        {activeView === 'doctor' ? <DoctorView report={state.doctor} loading={state.loading} /> : null}
+
+        {activeView === 'commands' ? (
+          <CommandView
+            project={selectedProject}
+            form={form}
+            setForm={setForm}
+            destructive={destructive}
+            canExecute={canExecute}
+            preview={() => void preview()}
+            execute={() => void execute()}
+            onOpenStacks={() => setActiveView('stacks')}
+          />
+        ) : null}
+      </main>
+    </div>
   );
 }
 
-function DoctorPanel({ report }: { report?: DoctorReport }) {
+function Sidebar({
+  activeView,
+  setActiveView,
+  summary,
+}: {
+  activeView: AppView;
+  setActiveView: (view: AppView) => void;
+  summary: DashboardSummary;
+}) {
+  return (
+    <aside className="sidebar">
+      <div className="brand-card">
+        <span className="brand-mark">c</span>
+        <div>
+          <strong>compose</strong>
+          <small>Local control center</small>
+        </div>
+      </div>
+      <nav className="sidebar-nav" aria-label="Main navigation">
+        <NavButton active={activeView === 'dashboard'} label="Dashboard" description="Overview" onClick={() => setActiveView('dashboard')} />
+        <NavButton active={activeView === 'stacks'} label="Stacks" description={`${summary.stackCount} projects`} onClick={() => setActiveView('stacks')} />
+        <NavButton active={activeView === 'doctor'} label="Doctor" description={summary.doctorIssues === 0 ? 'Healthy' : `${summary.doctorIssues} issues`} onClick={() => setActiveView('doctor')} />
+        <NavButton active={activeView === 'commands'} label="Commands" description="Preview first" onClick={() => setActiveView('commands')} />
+      </nav>
+      <div className="sidebar-footer">
+        <small>Workspace</small>
+        <strong>{summary.workspaceLabel}</strong>
+        <span>{summary.selectedStackLabel}</span>
+      </div>
+    </aside>
+  );
+}
+
+function NavButton({ active, label, description, onClick }: { active: boolean; label: string; description: string; onClick: () => void }) {
+  return (
+    <button className={active ? 'nav-button active' : 'nav-button'} type="button" onClick={onClick}>
+      <span>{label}</span>
+      <small>{description}</small>
+    </button>
+  );
+}
+
+function TopBar({
+  loading,
+  workspaceLabel,
+  health,
+  onRefresh,
+}: {
+  loading: boolean;
+  workspaceLabel: string;
+  health?: { ok: boolean; host: string };
+  onRefresh: () => void;
+}) {
+  return (
+    <header className="topbar">
+      <div>
+        <p className="eyebrow">CLI-first · local-only · token-protected</p>
+        <h1>Docker Compose workspace</h1>
+      </div>
+      <div className="topbar-actions">
+        <StatusPill tone={health?.ok === false ? 'danger' : 'ok'}>{health === undefined ? 'Server pending' : `Local ${health.host}`}</StatusPill>
+        <StatusPill tone="warning">{workspaceLabel}</StatusPill>
+        <button className="secondary" type="button" onClick={onRefresh} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function DashboardView({
+  loading,
+  summary,
+  state,
+  runtime,
+  setActiveView,
+  onRefresh,
+}: {
+  loading: boolean;
+  summary: DashboardSummary;
+  state: LoadState;
+  runtime: RuntimeState;
+  setActiveView: (view: AppView) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="view-stack">
+      <section className="hero-panel">
+        <div>
+          <p className="eyebrow">Professional local UI</p>
+          <h2>Operate your Compose stacks with confidence.</h2>
+          <p className="muted">
+            Inspect diagnostics, browse stacks, preview Docker Compose commands and execute only after explicit confirmation.
+          </p>
+        </div>
+        <div className="hero-actions">
+          <button type="button" onClick={() => setActiveView('stacks')}>Browse stacks</button>
+          <button className="secondary" type="button" onClick={() => setActiveView('commands')}>Prepare command</button>
+        </div>
+      </section>
+
+      {loading ? <SkeletonGrid /> : null}
+
+      <section className="metric-grid" aria-label="Workspace summary">
+        <MetricCard label="Stacks" value={summary.stackCount.toString()} detail={state.stacks?.root ?? 'Waiting for scan'} tone="info" />
+        <MetricCard label="Services" value={summary.serviceCount.toString()} detail="Declared across detected stacks" tone="ok" />
+        <MetricCard label="Doctor" value={summary.doctorIssues === 0 ? 'OK' : summary.doctorIssues.toString()} detail={summary.doctorIssues === 0 ? 'No issue detected' : 'Warnings or errors found'} tone={summary.doctorIssues === 0 ? 'ok' : 'warning'} />
+        <MetricCard label="Runtime" value={summary.runtimeLabel} detail={summary.selectedStackLabel} tone={runtime.error === undefined ? 'info' : 'warning'} />
+      </section>
+
+      <section className="grid two-columns">
+        <Panel title="Current workspace" subtitle="Local configuration">
+          <WorkspacePanel workspaces={state.workspaces} health={state.health} />
+        </Panel>
+        <Panel title="Recommended workflow" subtitle="Safe by default">
+          <div className="timeline">
+            <Step number="1" title="Select a stack" detail="Search and inspect services before choosing an action." />
+            <Step number="2" title="Preview command" detail="The generated docker compose command is shown before execution." />
+            <Step number="3" title="Confirm execution" detail="Dangerous actions require a second explicit confirmation." />
+          </div>
+          <div className="actions compact-actions">
+            <button type="button" onClick={() => setActiveView('stacks')}>Open stacks</button>
+            <button className="secondary" type="button" onClick={onRefresh}>Refresh data</button>
+          </div>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+function StacksView({
+  stacks,
+  visibleProjects,
+  selectedProject,
+  selectedId,
+  runtime,
+  search,
+  sort,
+  setSearch,
+  setSort,
+  onSelect,
+  onOpenCommands,
+  onRefreshRuntime,
+}: {
+  stacks?: StackListResult;
+  visibleProjects: DiscoveredComposeProject[];
+  selectedProject?: DiscoveredComposeProject;
+  selectedId?: string;
+  runtime: RuntimeState;
+  search: string;
+  sort: StackSortMode;
+  setSearch: (value: string) => void;
+  setSort: (value: StackSortMode) => void;
+  onSelect: (id: string) => void;
+  onOpenCommands: () => void;
+  onRefreshRuntime: () => void;
+}) {
+  return (
+    <div className="view-stack">
+      <Panel title="Stacks" subtitle={stacks === undefined ? 'Compose projects' : `${stacks.stacks.length} detected · ${stacks.root}`}>
+        <div className="toolbar">
+          <label>
+            Search
+            <input
+              type="search"
+              placeholder="Name, path or service..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <label>
+            Sort
+            <select value={sort} onChange={(event) => setSort(event.target.value as StackSortMode)}>
+              <option value="name">Name</option>
+              <option value="path">Path</option>
+              <option value="services">Service count</option>
+              <option value="runtime">Selected runtime first</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="stack-layout">
+          <div className="stack-list scroll-panel">
+            {visibleProjects.length === 0 ? (
+              <EmptyState title="No Compose stack found" detail="Change the search, configure a workspace, or scan a narrower root." />
+            ) : (
+              visibleProjects.map((project) => (
+                <StackCard
+                  key={project.id}
+                  project={project}
+                  selected={project.id === selectedId}
+                  runtime={project.id === selectedId ? runtime : undefined}
+                  onSelect={() => onSelect(project.id)}
+                />
+              ))
+            )}
+          </div>
+          <StackDetailPanel project={selectedProject} runtime={runtime} onOpenCommands={onOpenCommands} onRefreshRuntime={onRefreshRuntime} />
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function DoctorView({ report, loading }: { report?: DoctorReport; loading: boolean }) {
   const checks = report?.checks ?? [];
+  const okChecks = checks.filter((check) => check.status === 'ok').length;
+  const warningChecks = checks.filter((check) => check.status === 'warning').length;
+  const errorChecks = checks.filter((check) => check.status === 'error').length;
 
   return (
-    <Panel title="Doctor" subtitle="Local diagnostics">
-      {report === undefined ? (
-        <p className="muted">No diagnostic report loaded.</p>
-      ) : (
-        <StatusPill tone={report.ok ? 'ok' : 'danger'}>{report.ok ? 'OK' : 'Issues found'}</StatusPill>
-      )}
-      <div className="check-list">
-        {checks.length === 0 ? (
-          <p className="muted">No checks returned.</p>
+    <div className="view-stack">
+      <section className="metric-grid">
+        <MetricCard label="Status" value={report?.ok === true ? 'OK' : loading ? 'Loading' : 'Review'} detail="Local installation diagnostics" tone={report?.ok === true ? 'ok' : 'warning'} />
+        <MetricCard label="OK" value={okChecks.toString()} detail="Successful checks" tone="ok" />
+        <MetricCard label="Warnings" value={warningChecks.toString()} detail="Non-blocking issues" tone="warning" />
+        <MetricCard label="Errors" value={errorChecks.toString()} detail="Action required" tone={errorChecks === 0 ? 'ok' : 'danger'} />
+      </section>
+      <Panel title="Doctor diagnostics" subtitle="Node, npm, Docker, PATH and workspace checks">
+        {report === undefined ? (
+          <EmptyState title="No diagnostic report loaded" detail="Refresh the dashboard to load local diagnostics." />
         ) : (
-          checks.map((check) => (
-            <article key={check.id} className={`check-row ${check.status}`}>
-              <strong>{check.name}</strong>
-              <span>{check.message}</span>
-              {check.details === undefined ? null : <small>{check.details}</small>}
-            </article>
-          ))
+          <div className="check-list">
+            {checks.length === 0 ? (
+              <EmptyState title="No checks returned" detail="The doctor service did not return any diagnostic entry." />
+            ) : (
+              checks.map((check) => (
+                <article key={check.id} className={`check-row ${check.status}`}>
+                  <div>
+                    <strong>{check.name}</strong>
+                    <span>{check.message}</span>
+                  </div>
+                  <StatusPill tone={check.status === 'error' ? 'danger' : check.status}>{check.status}</StatusPill>
+                  {check.details === undefined ? null : <small>{check.details}</small>}
+                </article>
+              ))
+            )}
+          </div>
         )}
-      </div>
-    </Panel>
+      </Panel>
+    </div>
+  );
+}
+
+function CommandView({
+  project,
+  form,
+  setForm,
+  destructive,
+  canExecute,
+  preview,
+  execute,
+  onOpenStacks,
+}: {
+  project?: DiscoveredComposeProject;
+  form: CommandFormState;
+  setForm: React.Dispatch<React.SetStateAction<CommandFormState>>;
+  destructive: boolean;
+  canExecute: boolean;
+  preview: () => void;
+  execute: () => void;
+  onOpenStacks: () => void;
+}) {
+  const services = project?.services ?? [];
+
+  return (
+    <div className="view-stack">
+      <Panel title="Command workflow" subtitle="Preview first, confirm second, execute last">
+        {project === undefined ? (
+          <div className="empty-action">
+            <EmptyState title="Select a stack before preparing a command" detail="The command builder needs a Compose file target." />
+            <button type="button" onClick={onOpenStacks}>Choose a stack</button>
+          </div>
+        ) : (
+          <div className="selected-command-target">
+            <div>
+              <span className="muted">Selected stack</span>
+              <strong>{project.name}</strong>
+              <small>{project.composeFilePath}</small>
+            </div>
+            <StatusPill tone="ok">{project.services.length} services</StatusPill>
+          </div>
+        )}
+
+        <div className="command-grid">
+          <label>
+            Command
+            <select
+              value={form.command}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  command: event.target.value,
+                  confirmed: false,
+                  destructiveConfirmed: false,
+                  preview: undefined,
+                  execution: undefined,
+                  error: undefined,
+                }))
+              }
+            >
+              {commands.map((command) => (
+                <option key={command} value={command}>{command}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Service scope
+            <select
+              value={form.serviceName}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  serviceName: event.target.value,
+                  confirmed: false,
+                  destructiveConfirmed: false,
+                  preview: undefined,
+                  execution: undefined,
+                  error: undefined,
+                }))
+              }
+            >
+              <option value="">All services / stack level</option>
+              {services.map((service) => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {destructive ? (
+          <Banner tone="warning">
+            This command is destructive. Review the generated command and confirm the danger-zone checkbox before execution.
+          </Banner>
+        ) : null}
+
+        <div className="command-steps">
+          <Step number="1" title="Preview" detail="Generate and inspect the Docker Compose command." />
+          <Step number="2" title="Confirm" detail="Explicitly approve execution after preview." />
+          <Step number="3" title="Execute" detail="Run only when all safety checks are satisfied." />
+        </div>
+
+        <div className="actions">
+          <button type="button" onClick={preview} disabled={project === undefined || form.busy}>Preview command</button>
+          <button className={destructive ? 'danger' : undefined} type="button" onClick={execute} disabled={!canExecute || form.busy}>
+            {form.busy ? 'Working...' : 'Execute command'}
+          </button>
+        </div>
+
+        <div className={destructive ? 'confirmation-zone danger-zone' : 'confirmation-zone'}>
+          <label>
+            <input
+              type="checkbox"
+              checked={form.confirmed}
+              disabled={form.preview === undefined}
+              onChange={(event) => setForm((current) => ({ ...current, confirmed: event.target.checked }))}
+            />
+            I reviewed the generated command and confirm execution.
+          </label>
+          {destructive ? (
+            <label>
+              <input
+                type="checkbox"
+                checked={form.destructiveConfirmed}
+                disabled={form.preview === undefined}
+                onChange={(event) => setForm((current) => ({ ...current, destructiveConfirmed: event.target.checked }))}
+              />
+              I understand this destructive command can stop or remove resources.
+            </label>
+          ) : null}
+        </div>
+
+        {form.error === undefined ? null : <Banner tone="danger">{form.error}</Banner>}
+        {form.preview === undefined ? null : <CodeBlock title="Generated command" content={form.preview.displayCommand} />}
+        {form.execution === undefined ? null : <CodeBlock title={`Execution result · exit ${form.execution.exitCode}`} content={formatExecution(form.execution)} />}
+      </Panel>
+    </div>
   );
 }
 
@@ -231,15 +631,15 @@ function WorkspacePanel({ workspaces, health }: { workspaces?: WorkspaceListResu
   const entries = workspaces?.workspaces ?? [];
 
   return (
-    <Panel title="Workspaces" subtitle={health === undefined ? 'Local server' : `Server ${health.host}`}>
+    <div className="workspace-panel-content">
       {workspaces?.currentWorkspaceName === undefined ? (
-        <p className="muted">No current workspace configured.</p>
+        <Banner tone="warning">No current workspace configured.</Banner>
       ) : (
         <StatusPill tone="ok">Current: {workspaces.currentWorkspaceName}</StatusPill>
       )}
       <div className="list">
         {entries.length === 0 ? (
-          <p className="muted">No workspace saved yet.</p>
+          <EmptyState title="No workspace saved yet" detail="Create a workspace from the CLI to make the UI open directly on your usual source root." />
         ) : (
           entries.map((workspace) => (
             <article key={workspace.name} className="list-item">
@@ -249,207 +649,176 @@ function WorkspacePanel({ workspaces, health }: { workspaces?: WorkspaceListResu
           ))
         )}
       </div>
-    </Panel>
+      {health === undefined ? null : <small className="muted">Server: {health.host}</small>}
+    </div>
   );
 }
 
-function StackListPanel({
-  stacks,
-  selectedId,
+function StackCard({
+  project,
+  selected,
+  runtime,
   onSelect,
 }: {
-  stacks?: StackListResult;
-  selectedId?: string;
-  onSelect: (id: string) => void;
+  project: DiscoveredComposeProject;
+  selected: boolean;
+  runtime?: RuntimeState;
+  onSelect: () => void;
 }) {
-  const projects = stacks?.stacks ?? [];
+  const runtimeTone = runtimeToneFromState(runtime);
+  const runtimeLabel = selected && runtime?.status !== undefined ? runtime.status.state : selected && runtime?.loading === true ? 'loading' : 'not loaded';
 
   return (
-    <Panel title="Stacks" subtitle={stacks === undefined ? 'Compose projects' : `${projects.length} stacks · ${stacks.root}`}>
-      <div className="stack-list">
-        {projects.length === 0 ? (
-          <p className="muted">No Compose stack found.</p>
-        ) : (
-          projects.map((project) => (
-            <button
-              key={project.id}
-              type="button"
-              className={project.id === selectedId ? 'stack-card selected' : 'stack-card'}
-              onClick={() => onSelect(project.id)}
-            >
-              <strong>{project.name}</strong>
-              <span>
-                {project.services.length} services · {project.relativePath}
-              </span>
-            </button>
-          ))
-        )}
+    <button type="button" className={selected ? 'stack-card selected' : 'stack-card'} onClick={onSelect}>
+      <div className="stack-card-main">
+        <strong>{project.name}</strong>
+        <span>{project.relativePath}</span>
       </div>
-    </Panel>
+      <div className="stack-card-meta">
+        <StatusPill tone={runtimeTone}>{runtimeLabel}</StatusPill>
+        <small>{project.services.length} services</small>
+      </div>
+    </button>
   );
 }
 
-function StackDetailPanel({ project, runtime }: { project?: DiscoveredComposeProject; runtime: RuntimeState }) {
+function StackDetailPanel({
+  project,
+  runtime,
+  onOpenCommands,
+  onRefreshRuntime,
+}: {
+  project?: DiscoveredComposeProject;
+  runtime: RuntimeState;
+  onOpenCommands: () => void;
+  onRefreshRuntime: () => void;
+}) {
   const services = project?.services ?? [];
   const status = runtime.status;
 
   return (
-    <Panel title="Stack detail" subtitle={project?.composeFilePath ?? 'Select a stack'}>
+    <section className="stack-detail-panel">
       {project === undefined ? (
-        <p className="muted">Select a stack to inspect services and runtime status.</p>
+        <EmptyState title="No stack selected" detail="Choose a stack from the list to inspect services, runtime and command options." />
       ) : (
         <>
+          <div className="detail-header">
+            <div>
+              <p className="eyebrow">Selected stack</p>
+              <h2>{project.name}</h2>
+              <span className="muted path-text">{project.composeFilePath}</span>
+            </div>
+            <div className="detail-actions">
+              <button className="secondary" type="button" onClick={onRefreshRuntime} disabled={runtime.loading}>Refresh runtime</button>
+              <button type="button" onClick={onOpenCommands}>Prepare command</button>
+            </div>
+          </div>
+
           <div className="status-line">
-            <StatusPill tone={status?.available === false ? 'warning' : 'ok'}>
+            <StatusPill tone={runtimeToneFromState(runtime)}>
               {runtime.loading ? 'Loading runtime...' : status?.summary ?? 'Runtime unknown'}
             </StatusPill>
             {runtime.error === undefined ? null : <span className="danger-text">{runtime.error}</span>}
           </div>
           {status?.warning === undefined ? null : <Banner tone="warning">{status.warning}</Banner>}
-          <div className="service-grid">
-            {services.map((service) => {
-              const serviceStatus = status?.services?.[service];
 
-              return (
-                <article key={service} className="service-card">
-                  <strong>{service}</strong>
-                  <span>
-                    {serviceStatus?.state ?? 'unknown'} · {serviceStatus?.containerCount ?? 0} containers
-                  </span>
-                  {serviceStatus?.ports === undefined || serviceStatus.ports.length === 0 ? null : (
-                    <small>{serviceStatus.ports.join(', ')}</small>
-                  )}
-                </article>
-              );
-            })}
+          <div className="service-grid">
+            {services.length === 0 ? (
+              <EmptyState title="No service declared" detail="This Compose file was detected, but no services were parsed." />
+            ) : (
+              services.map((service) => {
+                const serviceStatus = status?.services?.[service];
+
+                return (
+                  <article key={service} className="service-card">
+                    <div className="service-title-row">
+                      <strong>{service}</strong>
+                      <StatusPill tone={toneForServiceState(serviceStatus?.state)}>{serviceStatus?.state ?? 'unknown'}</StatusPill>
+                    </div>
+                    <span>{serviceStatus?.containerCount ?? 0} containers</span>
+                    {serviceStatus?.ports === undefined || serviceStatus.ports.length === 0 ? <small>No exposed port detected</small> : <small>Ports: {serviceStatus.ports.join(', ')}</small>}
+                    {serviceStatus?.containerNames === undefined || serviceStatus.containerNames.length === 0 ? null : <small>Containers: {serviceStatus.containerNames.join(', ')}</small>}
+                  </article>
+                );
+              })
+            )}
           </div>
         </>
       )}
-    </Panel>
+    </section>
   );
 }
 
-function CommandPanel({
-  project,
-  form,
-  setForm,
-  destructive,
-  canExecute,
-  preview,
-  execute,
-}: {
-  project?: DiscoveredComposeProject;
-  form: CommandFormState;
-  setForm: React.Dispatch<React.SetStateAction<CommandFormState>>;
-  destructive: boolean;
-  canExecute: boolean;
-  preview: () => void;
-  execute: () => void;
-}) {
-  const services = project?.services ?? [];
-
+function MetricCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: 'ok' | 'warning' | 'danger' | 'info' }) {
   return (
-    <Panel title="Command preview" subtitle="Always inspect the Docker command before execution">
-      {project === undefined ? <p className="muted">Select a stack before previewing a command.</p> : null}
-      <div className="command-grid">
-        <label>
-          Command
-          <select
-            value={form.command}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                command: event.target.value,
-                preview: undefined,
-                execution: undefined,
-                error: undefined,
-              }))
-            }
-          >
-            {commands.map((command) => (
-              <option key={command} value={command}>
-                {command}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Service
-          <select
-            value={form.serviceName}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                serviceName: event.target.value,
-                preview: undefined,
-                execution: undefined,
-                error: undefined,
-              }))
-            }
-          >
-            <option value="">All services / stack level</option>
-            {services.map((service) => (
-              <option key={service} value={service}>
-                {service}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+    <article className={`metric-card ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
+  );
+}
 
-      <div className="actions">
-        <button type="button" onClick={preview} disabled={project === undefined || form.busy}>
-          Preview
-        </button>
-        <button className="danger" type="button" onClick={execute} disabled={!canExecute || form.busy}>
-          Execute
-        </button>
-      </div>
-
-      <div className="checkbox-row">
-        <label>
-          <input
-            type="checkbox"
-            checked={form.confirmed}
-            onChange={(event) => setForm((current) => ({ ...current, confirmed: event.target.checked }))}
-          />
-          I confirm execution
-        </label>
-        {destructive ? (
-          <label>
-            <input
-              type="checkbox"
-              checked={form.destructiveConfirmed}
-              onChange={(event) => setForm((current) => ({ ...current, destructiveConfirmed: event.target.checked }))}
-            />
-            I confirm destructive execution
-          </label>
-        ) : null}
-      </div>
-
-      {form.error === undefined ? null : <Banner tone="danger">{form.error}</Banner>}
-      {form.preview === undefined ? null : (
-        <div className="code-block">
-          <strong>Preview</strong>
-          <pre>{form.preview.displayCommand}</pre>
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <section className="panel">
+      <div className="panel-header">
+        <div>
+          <h2>{title}</h2>
+          <span>{subtitle}</span>
         </div>
-      )}
-      {form.execution === undefined ? null : (
-        <div className="code-block">
-          <strong>Execution result</strong>
-          <pre>
-            {[
-              `command: ${form.execution.command}`,
-              `exitCode: ${form.execution.exitCode}`,
-              form.execution.stdout === '' ? undefined : `stdout:\n${form.execution.stdout}`,
-              form.execution.stderr === '' ? undefined : `stderr:\n${form.execution.stderr}`,
-            ]
-              .filter(Boolean)
-              .join('\n\n')}
-          </pre>
-        </div>
-      )}
-    </Panel>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Step({ number, title, detail }: { number: string; title: string; detail: string }) {
+  return (
+    <article className="step-card">
+      <span>{number}</span>
+      <div>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </div>
+    </article>
+  );
+}
+
+function EmptyState({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      <span>{detail}</span>
+    </div>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <section className="metric-grid" aria-label="Loading summary">
+      <div className="skeleton-card" />
+      <div className="skeleton-card" />
+      <div className="skeleton-card" />
+      <div className="skeleton-card" />
+    </section>
+  );
+}
+
+function Banner({ tone, children }: { tone: 'info' | 'warning' | 'danger'; children: React.ReactNode }) {
+  return <div className={`banner ${tone}`}>{children}</div>;
+}
+
+function StatusPill({ tone, children }: { tone: 'ok' | 'warning' | 'danger'; children: React.ReactNode }) {
+  return <span className={`status-pill ${tone}`}>{children}</span>;
+}
+
+function CodeBlock({ title, content }: { title: string; content: string }) {
+  return (
+    <div className="code-block">
+      <strong>{title}</strong>
+      <pre>{content}</pre>
+    </div>
   );
 }
 
@@ -468,22 +837,112 @@ function createRequest(project: DiscoveredComposeProject | undefined, form: Comm
   };
 }
 
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <section className="panel">
-      <div className="panel-header">
-        <h2>{title}</h2>
-        <span>{subtitle}</span>
-      </div>
-      {children}
-    </section>
-  );
+function createDashboardSummary(
+  state: LoadState,
+  selectedProject: DiscoveredComposeProject | undefined,
+  runtime: RuntimeState,
+): DashboardSummary {
+  const stacks = state.stacks?.stacks ?? [];
+  const doctorIssues = state.doctor?.checks.filter((check) => check.status !== 'ok').length ?? 0;
+
+  return {
+    stackCount: stacks.length,
+    serviceCount: stacks.reduce((total, project) => total + project.services.length, 0),
+    workspaceLabel: state.workspaces?.currentWorkspaceName ?? state.stacks?.workspaceName ?? 'No workspace',
+    doctorIssues,
+    runtimeLabel: runtime.loading ? 'Loading' : runtime.status?.state ?? (runtime.error === undefined ? 'Unknown' : 'Unavailable'),
+    selectedStackLabel: selectedProject?.name ?? 'No stack selected',
+  };
 }
 
-function Banner({ tone, children }: { tone: 'info' | 'warning' | 'danger'; children: React.ReactNode }) {
-  return <div className={`banner ${tone}`}>{children}</div>;
+function filterProjects(projects: DiscoveredComposeProject[], search: string): DiscoveredComposeProject[] {
+  const query = search.trim().toLowerCase();
+
+  if (query.length === 0) {
+    return projects;
+  }
+
+  return projects.filter((project) => [
+    project.name,
+    project.relativePath,
+    project.composeFilePath,
+    project.services.join(' '),
+  ].some((value) => value.toLowerCase().includes(query)));
 }
 
-function StatusPill({ tone, children }: { tone: 'ok' | 'warning' | 'danger'; children: React.ReactNode }) {
-  return <span className={`status-pill ${tone}`}>{children}</span>;
+function sortProjects(projects: DiscoveredComposeProject[], sortMode: StackSortMode, selectedProjectId: string | undefined): DiscoveredComposeProject[] {
+  return [...projects].sort((left, right) => {
+    if (sortMode === 'services') {
+      return right.services.length - left.services.length || left.name.localeCompare(right.name);
+    }
+
+    if (sortMode === 'path') {
+      return left.relativePath.localeCompare(right.relativePath) || left.name.localeCompare(right.name);
+    }
+
+    if (sortMode === 'runtime') {
+      return Number(right.id === selectedProjectId) - Number(left.id === selectedProjectId) || left.name.localeCompare(right.name);
+    }
+
+    return left.name.localeCompare(right.name) || left.relativePath.localeCompare(right.relativePath);
+  });
+}
+
+function currentProjectOrFirst(current: string | undefined, projects: DiscoveredComposeProject[]): string | undefined {
+  if (current !== undefined && projects.some((project) => project.id === current)) {
+    return current;
+  }
+
+  return projects[0]?.id;
+}
+
+function clearCommandFeedback(setForm: React.Dispatch<React.SetStateAction<CommandFormState>>) {
+  setForm((current) => ({
+    ...current,
+    serviceName: '',
+    confirmed: false,
+    destructiveConfirmed: false,
+    preview: undefined,
+    execution: undefined,
+    error: undefined,
+  }));
+}
+
+function runtimeToneFromState(runtime: RuntimeState | undefined): 'ok' | 'warning' | 'danger' {
+  if (runtime === undefined || runtime.loading) {
+    return 'warning';
+  }
+
+  if (runtime.error !== undefined || runtime.status?.available === false) {
+    return 'warning';
+  }
+
+  return toneForServiceState(runtime.status?.state);
+}
+
+function toneForServiceState(state: string | undefined): 'ok' | 'warning' | 'danger' {
+  if (state === undefined) {
+    return 'warning';
+  }
+
+  const normalized = state.toLowerCase();
+
+  if (normalized.includes('running') || normalized === 'ok') {
+    return 'ok';
+  }
+
+  if (normalized.includes('unhealthy') || normalized.includes('error') || normalized.includes('failed')) {
+    return 'danger';
+  }
+
+  return 'warning';
+}
+
+function formatExecution(execution: ComposeExecutionResult): string {
+  return [
+    `command: ${execution.command}`,
+    `exitCode: ${execution.exitCode}`,
+    execution.stdout === '' ? undefined : `stdout:\n${execution.stdout}`,
+    execution.stderr === '' ? undefined : `stderr:\n${execution.stderr}`,
+  ].filter((line): line is string => line !== undefined).join('\n\n');
 }

@@ -1,13 +1,16 @@
 import { constants } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { platform as getDefaultPlatform } from 'node:os';
+import { dirname, join, normalize } from 'node:path';
 import { execa } from 'execa';
+import { resolvePackageVersion } from '../utils/package-metadata.js';
 import { createWorkspaceStore, getCurrentWorkspace } from '../workspace/workspace-store.js';
 import type { WorkspaceStore } from '../workspace/workspace-store.js';
 
 export type DoctorCheckStatus = 'ok' | 'warning' | 'error';
 
 export type DoctorCheck = {
+  id: string;
   name: string;
   status: DoctorCheckStatus;
   message: string;
@@ -29,10 +32,15 @@ export type DoctorCommandResult = {
 
 export type DoctorCommandRunner = (binary: string, args: string[]) => Promise<DoctorCommandResult>;
 
+export type DoctorEnvironment = Record<string, string | undefined>;
+
 export type DoctorOptions = {
   strict?: boolean;
   skipDocker?: boolean;
   nodeVersion?: string;
+  cliVersion?: string;
+  platform?: NodeJS.Platform;
+  environment?: DoctorEnvironment;
   workspaceStore?: WorkspaceStore;
   commandRunner?: DoctorCommandRunner;
 };
@@ -44,6 +52,11 @@ type ExecaDoctorResultLike = {
 };
 
 type ExecaDoctorLike = (binary: string, args: string[], options: { reject: false }) => Promise<ExecaDoctorResultLike>;
+
+type NpmGlobalPrefixResult = {
+  check: DoctorCheck;
+  prefix?: string;
+};
 
 const minimumNodeVersion = {
   major: 20,
@@ -57,8 +70,15 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
   const strict = options.strict === true;
   const workspaceStore = options.workspaceStore ?? createWorkspaceStore();
   const commandRunner = options.commandRunner ?? defaultCommandRunner;
+  const currentPlatform = options.platform ?? getDefaultPlatform();
+  const environment = options.environment ?? process.env;
+  const npmGlobalPrefix = await checkNpmGlobalPrefix(commandRunner);
   const checks = [
+    checkCliVersion(options.cliVersion ?? resolvePackageVersion()),
     checkNodeVersion(options.nodeVersion ?? process.versions.node),
+    await checkComposeExecutable(commandRunner, currentPlatform),
+    npmGlobalPrefix.check,
+    ...(npmGlobalPrefix.prefix === undefined ? [] : [checkPathIncludesNpmGlobalPrefix(npmGlobalPrefix.prefix, currentPlatform, environment)]),
     ...(await checkDocker(options.skipDocker === true, commandRunner)),
     await checkConfigAccess(workspaceStore),
     await checkCurrentWorkspace(workspaceStore),
@@ -127,11 +147,31 @@ function formatStatus(status: DoctorCheckStatus): string {
   return labels[status];
 }
 
+function checkCliVersion(version: string): DoctorCheck {
+  if (version === '0.0.0') {
+    return {
+      id: 'compose-cli-version',
+      name: 'compose CLI',
+      status: 'warning',
+      message: 'Unable to resolve the installed compose package version.',
+      details: 'Package metadata could not be read. The CLI can still run, but release diagnostics are incomplete.',
+    };
+  }
+
+  return {
+    id: 'compose-cli-version',
+    name: 'compose CLI',
+    status: 'ok',
+    message: `compose CLI ${version} is installed.`,
+  };
+}
+
 function checkNodeVersion(version: string): DoctorCheck {
   const parsedVersion = parseNodeVersion(version);
 
   if (parsedVersion === undefined) {
     return {
+      id: 'node-version',
       name: 'Node.js',
       status: 'error',
       message: `Unable to parse Node.js version ${version}.`,
@@ -141,6 +181,7 @@ function checkNodeVersion(version: string): DoctorCheck {
 
   if (!isAtLeast(parsedVersion, minimumNodeVersion)) {
     return {
+      id: 'node-version',
       name: 'Node.js',
       status: 'error',
       message: `Node.js ${version} is below the required 20.19.0 runtime.`,
@@ -149,9 +190,110 @@ function checkNodeVersion(version: string): DoctorCheck {
   }
 
   return {
+    id: 'node-version',
     name: 'Node.js',
     status: 'ok',
     message: `Node.js ${version} is supported.`,
+  };
+}
+
+async function checkComposeExecutable(commandRunner: DoctorCommandRunner, currentPlatform: NodeJS.Platform): Promise<DoctorCheck> {
+  const lookupCommand = currentPlatform === 'win32'
+    ? { binary: 'where.exe', args: ['compose'] }
+    : { binary: 'which', args: ['compose'] };
+  const result = await commandRunner(lookupCommand.binary, lookupCommand.args);
+  const output = getCommandOutput(result);
+  const firstMatch = output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+
+  if (result.exitCode !== 0 || firstMatch === undefined) {
+    return {
+      id: 'compose-executable',
+      name: 'compose executable',
+      status: 'warning',
+      message: 'The compose command is not discoverable from PATH.',
+      details: output.length === 0
+        ? 'Reopen the terminal after npm global install, then run compose --version.'
+        : output,
+    };
+  }
+
+  return {
+    id: 'compose-executable',
+    name: 'compose executable',
+    status: 'ok',
+    message: 'The compose command is discoverable from PATH.',
+    details: firstMatch,
+  };
+}
+
+async function checkNpmGlobalPrefix(commandRunner: DoctorCommandRunner): Promise<NpmGlobalPrefixResult> {
+  const result = await commandRunner('npm', ['prefix', '-g']);
+  const output = getCommandOutput(result);
+  const prefix = output.split(/\r?\n/)[0]?.trim() ?? '';
+
+  if (result.exitCode !== 0 || prefix.length === 0) {
+    return {
+      check: {
+        id: 'npm-global-prefix',
+        name: 'npm global prefix',
+        status: 'warning',
+        message: 'Unable to resolve the npm global prefix.',
+        details: output.length === 0
+          ? 'Run npm prefix -g to verify the global installation directory.'
+          : output,
+      },
+    };
+  }
+
+  return {
+    check: {
+      id: 'npm-global-prefix',
+      name: 'npm global prefix',
+      status: 'ok',
+      message: 'npm global prefix resolved.',
+      details: prefix,
+    },
+    prefix,
+  };
+}
+
+function checkPathIncludesNpmGlobalPrefix(
+  npmGlobalPrefix: string,
+  currentPlatform: NodeJS.Platform,
+  environment: DoctorEnvironment,
+): DoctorCheck {
+  const expectedExecutableDirectory = currentPlatform === 'win32' ? npmGlobalPrefix : join(npmGlobalPrefix, 'bin');
+  const pathValue = getEnvironmentPath(environment);
+
+  if (pathValue.trim().length === 0) {
+    return {
+      id: 'path-npm-prefix',
+      name: 'PATH',
+      status: 'warning',
+      message: 'PATH is empty or unavailable.',
+      details: `Expected npm global executable directory: ${expectedExecutableDirectory}`,
+    };
+  }
+
+  const expectedPath = normalizePathForComparison(expectedExecutableDirectory, currentPlatform);
+  const pathEntries = splitPathEntries(pathValue, currentPlatform).map((entry) => normalizePathForComparison(entry, currentPlatform));
+
+  if (!pathEntries.includes(expectedPath)) {
+    return {
+      id: 'path-npm-prefix',
+      name: 'PATH',
+      status: 'warning',
+      message: 'npm global executable directory is not present in PATH.',
+      details: `Add ${expectedExecutableDirectory} to PATH, then reopen the terminal.`,
+    };
+  }
+
+  return {
+    id: 'path-npm-prefix',
+    name: 'PATH',
+    status: 'ok',
+    message: 'PATH includes the npm global executable directory.',
+    details: expectedExecutableDirectory,
   };
 }
 
@@ -159,6 +301,7 @@ async function checkDocker(skipDocker: boolean, commandRunner: DoctorCommandRunn
   if (skipDocker) {
     return [
       {
+        id: 'docker-skipped',
         name: 'Docker',
         status: 'warning',
         message: 'Docker checks were skipped.',
@@ -167,8 +310,8 @@ async function checkDocker(skipDocker: boolean, commandRunner: DoctorCommandRunn
     ];
   }
 
-  const dockerVersion = await runDiagnosticCommand(commandRunner, 'docker', ['--version'], 'Docker');
-  const composeVersion = await runDiagnosticCommand(commandRunner, 'docker', ['compose', 'version'], 'Docker Compose');
+  const dockerVersion = await runDiagnosticCommand(commandRunner, 'docker', ['--version'], 'Docker', 'docker-cli');
+  const composeVersion = await runDiagnosticCommand(commandRunner, 'docker', ['compose', 'version'], 'Docker Compose', 'docker-compose');
 
   return [dockerVersion, composeVersion];
 }
@@ -178,12 +321,14 @@ async function runDiagnosticCommand(
   binary: string,
   args: string[],
   name: string,
+  id: string,
 ): Promise<DoctorCheck> {
   const result = await commandRunner(binary, args);
-  const output = result.stdout.trim() || result.stderr.trim();
+  const output = getCommandOutput(result);
 
   if (result.exitCode !== 0) {
     return {
+      id,
       name,
       status: 'error',
       message: `${name} is not available.`,
@@ -192,6 +337,7 @@ async function runDiagnosticCommand(
   }
 
   return {
+    id,
     name,
     status: 'ok',
     message: output.length === 0 ? `${name} command succeeded.` : output,
@@ -205,6 +351,7 @@ async function checkConfigAccess(workspaceStore: WorkspaceStore): Promise<Doctor
     await access(configDirectory, constants.R_OK | constants.W_OK);
 
     return {
+      id: 'user-config',
       name: 'User config',
       status: 'ok',
       message: 'User config directory is readable and writable.',
@@ -212,6 +359,7 @@ async function checkConfigAccess(workspaceStore: WorkspaceStore): Promise<Doctor
     };
   } catch (error) {
     return {
+      id: 'user-config',
       name: 'User config',
       status: 'error',
       message: 'User config path is not accessible.',
@@ -227,6 +375,7 @@ async function checkCurrentWorkspace(workspaceStore: WorkspaceStore): Promise<Do
 
     if (currentWorkspace === undefined) {
       return {
+        id: 'current-workspace',
         name: 'Workspace',
         status: 'warning',
         message: 'No current workspace is configured.',
@@ -235,6 +384,7 @@ async function checkCurrentWorkspace(workspaceStore: WorkspaceStore): Promise<Do
     }
 
     return {
+      id: 'current-workspace',
       name: 'Workspace',
       status: 'ok',
       message: `Current workspace is ${currentWorkspace.name}.`,
@@ -242,12 +392,38 @@ async function checkCurrentWorkspace(workspaceStore: WorkspaceStore): Promise<Do
     };
   } catch (error) {
     return {
+      id: 'current-workspace',
       name: 'Workspace',
       status: 'error',
       message: 'Unable to read workspace configuration.',
       details: error instanceof Error ? error.message : workspaceStore.configPath,
     };
   }
+}
+
+function getCommandOutput(result: DoctorCommandResult): string {
+  return (result.stdout.trim() || result.stderr.trim()).trim();
+}
+
+function getEnvironmentPath(environment: DoctorEnvironment): string {
+  return environment.PATH ?? environment.Path ?? '';
+}
+
+function splitPathEntries(pathValue: string, currentPlatform: NodeJS.Platform): string[] {
+  const pathDelimiter = currentPlatform === 'win32' ? ';' : ':';
+  return pathValue
+    .split(pathDelimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function normalizePathForComparison(value: string, currentPlatform: NodeJS.Platform): string {
+  const unquoted = value.trim().replace(/^"|"$/g, '').replace(/[\\/]+$/g, '');
+  const normalizedValue = currentPlatform === 'win32'
+    ? unquoted.replaceAll('/', '\\')
+    : normalize(unquoted);
+
+  return currentPlatform === 'win32' ? normalizedValue.toLowerCase() : normalizedValue;
 }
 
 function parseNodeVersion(version: string): { major: number; minor: number; patch: number } | undefined {

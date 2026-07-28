@@ -2,7 +2,7 @@
 
 ## Objective
 
-`compose` is a typed, guided facade over `docker compose`. The CLI keeps the external Docker Compose execution model, but centralises command construction, dry-run previews, guided prompts and test coverage.
+`compose` is a typed, guided facade over `docker compose`. The CLI keeps the external Docker Compose execution model, but centralises command construction, dry-run previews, guided prompts, structured diagnostics and test coverage.
 
 This command surface focuses on the most useful operational Docker Compose commands while keeping the implementation GUI-ready.
 
@@ -18,7 +18,7 @@ compose start [services...]
 compose stop [services...]
 compose restart [services...]
 compose pause [services...]
-compose unpause [services...]
+compose unpause
 compose kill [services...]
 compose rm [services...]
 ```
@@ -155,10 +155,34 @@ compose cp --project ./infra api:/tmp/file.txt ./file.txt --dry-run
 # docker compose -f ./infra/compose.yaml cp api:/tmp/file.txt ./file.txt
 ```
 
+## Failure diagnostics
+
+Failed executions return the same base result fields as before:
+
+```text
+command
+exitCode
+stdout
+stderr
+```
+
+They can also include a structured `diagnostic` object. The first supported failure kinds are:
+
+```text
+docker-unavailable
+compose-file-missing
+compose-command-failed
+```
+
+The diagnostic carries the generated command, working directory, Compose file path, exit code, hints and raw process output. This lets terminal and local UI flows explain common failures without hiding Docker Compose stdout/stderr.
+
+See [`compose-error-reporting.md`](compose-error-reporting.md) for the detailed model.
+
 ## Design notes
 
 - `docker compose` remains the execution layer.
 - Command registration stays in the CLI layer.
 - Command building stays in the `compose` module.
 - Guided questions stay descriptor-driven under `guided`.
+- Execution diagnostics are attached after Docker Compose execution and do not change command generation.
 - The browser keeps using typed `ComposeExecutionRequest` values instead of creating a separate menu-specific command model.

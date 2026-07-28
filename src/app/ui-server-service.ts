@@ -50,7 +50,7 @@ export type LocalUiServer = {
 
 export type LocalUiLogStreamInput = {
   project: DiscoveredComposeProject;
-  serviceName?: string;
+  serviceName?: string | undefined;
   tail: string;
   signal: AbortSignal;
 };

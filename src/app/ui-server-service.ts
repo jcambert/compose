@@ -572,7 +572,7 @@ function createReactIndexHtml(token: string): string {
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><main class="app-shell"><div class="banner info">Loading compose UI...</div></main></div>
   <script type="module">
     import React, { useEffect, useMemo, useState } from 'https://esm.sh/react@19.2.7';
     import { createRoot } from 'https://esm.sh/react-dom@19.2.7/client';
@@ -732,7 +732,7 @@ function createReactIndexHtml(token: string): string {
         h('div', { className: 'actions' }, h('button', { type: 'button', onClick: preview, disabled: !project || form.busy }, 'Preview command'), h('button', { type: 'button', className: 'danger', onClick: execute, disabled: !canExecute || form.busy }, 'Execute')),
         form.error ? h(Banner, { tone: 'danger' }, form.error) : null,
         form.preview ? h(CodeBlock, { title: 'Generated command' }, form.preview.displayCommand) : null,
-        form.execution ? h(CodeBlock, { title: 'Execution result · exit ' + form.execution.exitCode }, [form.execution.stdout, form.execution.stderr].filter(part => part && part.length > 0).join('\n') || form.execution.command) : null
+        form.execution ? h(CodeBlock, { title: 'Execution result · exit ' + form.execution.exitCode }, [form.execution.stdout, form.execution.stderr].filter(part => part && part.length > 0).join('\\n') || form.execution.command) : null
       );
     }
 

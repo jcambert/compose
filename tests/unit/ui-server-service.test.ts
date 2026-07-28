@@ -121,6 +121,9 @@ describe('local UI server application service', () => {
       expect(html).toContain('React MVP');
       expect(html).toContain('https://esm.sh/react@19.2.7');
       expect(html).toContain('window.__COMPOSE_UI_TOKEN__');
+      expect(html).toContain('Loading compose UI...');
+      expect(html).toContain(".join('\\n')");
+      expect(html).not.toContain(".join('\n')");
     } finally {
       await server.close();
     }

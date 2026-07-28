@@ -107,6 +107,25 @@ describe('local UI server application service', () => {
     }
   });
 
+  it('serves the React GUI shell from the token-protected root page', async () => {
+    const server = await startTestServer();
+
+    try {
+      const unauthorized = await fetch(apiUrl(server, '/'));
+      const response = await fetch(`${apiUrl(server, '/')}?token=${encodeURIComponent(token)}`);
+      const html = await response.text();
+
+      expect(unauthorized.status).toBe(401);
+      expect(response.status).toBe(200);
+      expect(html).toContain('compose UI');
+      expect(html).toContain('React MVP');
+      expect(html).toContain('https://esm.sh/react@19.2.7');
+      expect(html).toContain('window.__COMPOSE_UI_TOKEN__');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('reads runtime status for a stack by id', async () => {
     const server = await startTestServer();
 

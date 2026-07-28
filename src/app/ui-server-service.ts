@@ -1,9 +1,12 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { platform as getPlatform } from 'node:os';
+import { dirname, extname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 import { execa } from 'execa';
 import type { BuiltComposeCommand, ComposeSubCommand } from '../compose/compose-command.js';
@@ -82,6 +85,7 @@ type JsonObject = Record<string, unknown>;
 
 const localUiHost = '127.0.0.1' as const;
 const maximumRequestBodyBytes = 1024 * 1024;
+const uiDistDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'ui');
 const destructiveCommands = new Set<ComposeSubCommand>(['down', 'kill', 'rm']);
 const composeSubCommands = new Set<ComposeSubCommand>([
   'up',
@@ -170,13 +174,22 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   try {
     const url = new URL(request.url ?? '/', `http://${localUiHost}`);
 
-    if (!isAuthorized(request, url, context.token)) {
-      sendError(response, 401, 'unauthorized', 'Invalid or missing local UI token.');
+    if (request.method === 'GET' && url.pathname === '/') {
+      if (!isAuthorized(request, url, context.token)) {
+        sendError(response, 401, 'unauthorized', 'Invalid or missing local UI token.');
+        return;
+      }
+
+      sendHtml(response, await createIndexHtml(context.token));
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/') {
-      sendHtml(response, createIndexHtml(context.token));
+    if (request.method === 'GET' && await trySendStaticAsset(url.pathname, response)) {
+      return;
+    }
+
+    if (url.pathname.startsWith('/api/') && !isAuthorized(request, url, context.token)) {
+      sendError(response, 401, 'unauthorized', 'Invalid or missing local UI token.');
       return;
     }
 
@@ -479,9 +492,73 @@ function isAuthorized(request: IncomingMessage, url: URL, token: string): boolea
   return request.headers.authorization === `Bearer ${token}`;
 }
 
+async function createIndexHtml(token: string): Promise<string> {
+  try {
+    const content = await readFile(join(uiDistDirectory, 'index.html'), 'utf-8');
+    return injectLocalUiToken(content, token);
+  } catch {
+    return createFallbackIndexHtml(token);
+  }
+}
+
+function injectLocalUiToken(content: string, token: string): string {
+  const script = `<script>window.__COMPOSE_UI_TOKEN__=${JSON.stringify(token)};</script>`;
+
+  if (content.includes('<!-- compose-ui-token -->')) {
+    return content.replace('<!-- compose-ui-token -->', script);
+  }
+
+  if (content.includes('</head>')) {
+    return content.replace('</head>', `${script}</head>`);
+  }
+
+  return `${script}${content}`;
+}
+
+async function trySendStaticAsset(pathname: string, response: ServerResponse): Promise<boolean> {
+  const assetPath = resolveUiAssetPath(pathname);
+
+  if (assetPath === undefined) {
+    return false;
+  }
+
+  try {
+    const content = await readFile(assetPath);
+    sendStaticContent(response, content, assetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveUiAssetPath(pathname: string): string | undefined {
+  if (!pathname.startsWith('/assets/')) {
+    return undefined;
+  }
+
+  const relativePath = decodeURIComponent(pathname).replace(/^\/+/, '');
+  const assetPath = resolve(uiDistDirectory, relativePath);
+  const normalizedRoot = uiDistDirectory.endsWith(sep) ? uiDistDirectory : `${uiDistDirectory}${sep}`;
+
+  if (!assetPath.startsWith(normalizedRoot)) {
+    return undefined;
+  }
+
+  return assetPath;
+}
+
 function sendHtml(response: ServerResponse, content: string): void {
   response.writeHead(200, {
     'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
+  response.end(content);
+}
+
+function sendStaticContent(response: ServerResponse, content: Buffer, assetPath: string): void {
+  response.writeHead(200, {
+    'content-type': resolveContentType(assetPath),
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
   });
@@ -506,15 +583,14 @@ function sendError(response: ServerResponse, statusCode: number, code: string, m
   });
 }
 
-function createIndexHtml(token: string): string {
-  const encodedToken = JSON.stringify(token);
-
+function createFallbackIndexHtml(token: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>compose UI</title>
+  <script>window.__COMPOSE_UI_TOKEN__=${JSON.stringify(token)};</script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 2rem; background: #111827; color: #f9fafb; }
     code, pre { background: #1f2937; border-radius: .5rem; padding: .75rem; }
@@ -524,40 +600,41 @@ function createIndexHtml(token: string): string {
   </style>
 </head>
 <body>
-  <h1>compose UI</h1>
-  <p class="muted">Local server MVP. React UI comes in the next GUI step.</p>
-  <div class="card">
-    <h2>Endpoints</h2>
-    <pre>GET  /api/health
+  <div id="root">
+    <h1>compose UI</h1>
+    <p class="muted">React GUI bundle is not built yet. Run npm run build:ui, then restart compose ui.</p>
+    <div class="card">
+      <h2>Available API endpoints</h2>
+      <pre>GET  /api/health
 GET  /api/doctor
 GET  /api/workspaces
 GET  /api/stacks
 GET  /api/stacks/:id/runtime
 POST /api/commands/preview
 POST /api/commands/execute</pre>
+    </div>
   </div>
-  <div class="card">
-    <h2>Current state</h2>
-    <pre id="state">Loading...</pre>
-  </div>
-  <script>
-    const token = ${encodedToken};
-    async function load() {
-      const headers = { Authorization: 'Bearer ' + token };
-      const [health, doctor, workspaces, stacks] = await Promise.all([
-        fetch('/api/health', { headers }).then(response => response.json()),
-        fetch('/api/doctor?skipDocker=true', { headers }).then(response => response.json()),
-        fetch('/api/workspaces', { headers }).then(response => response.json()),
-        fetch('/api/stacks', { headers }).then(response => response.json()),
-      ]);
-      document.getElementById('state').textContent = JSON.stringify({ health, doctor, workspaces, stacks }, null, 2);
-    }
-    load().catch(error => {
-      document.getElementById('state').textContent = String(error);
-    });
-  </script>
 </body>
 </html>`;
+}
+
+function resolveContentType(assetPath: string): string {
+  const extension = extname(assetPath).toLowerCase();
+
+  switch (extension) {
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.js':
+      return 'text/javascript; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.html':
+      return 'text/html; charset=utf-8';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 async function listen(server: Server, port: number, host: string): Promise<void> {

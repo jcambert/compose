@@ -65,9 +65,21 @@ The GUI must reuse the same core primitives as the CLI:
 
 The CLI and GUI must both resolve actions into the same typed command intent model before execution. The GUI must never parse terminal help output or rebuild Docker Compose commands independently.
 
-## Planned module direction
+## Current module direction
 
-The current CLI already keeps scanning, command building, guided descriptors, interactive browsing and workspace persistence separate from terminal rendering. The next preparation step is to formalize a reusable application layer.
+The CLI now routes through an application service boundary that is shared by future adapters.
+
+Current app boundary:
+
+```text
+src/app/scan-service.ts              scan Compose projects
+src/app/compose-file-resolver.ts     resolve project/file targets
+src/app/compose-command-service.ts   resolve, preview and execute Compose commands
+src/app/project-service.ts           create/update/validate Compose projects
+src/app/workspace-service.ts         manage workspaces and favorites
+src/app/stack-browser-service.ts     wire browsing to workspace persistence
+src/app/doctor-service.ts            expose diagnostics through the app boundary
+```
 
 Target direction:
 
@@ -98,20 +110,22 @@ Expected output:
 - `docs/gui-roadmap.md`
 - updated `docs/backlog.md`
 
+Status: completed in PR #19.
+
 ### Step 2 — Formalize reusable application services
 
 Extract and stabilize application services that can be called by both the CLI and the future GUI.
 
-Candidate services:
+Current services:
 
 ```text
-src/app/scan-compose-projects.ts
-src/app/read-runtime-status.ts
-src/app/run-doctor.ts
-src/app/manage-workspaces.ts
-src/app/manage-favorites.ts
-src/app/preview-compose-command.ts
-src/app/execute-compose-command.ts
+src/app/scan-service.ts
+src/app/doctor-service.ts
+src/app/workspace-service.ts
+src/app/stack-browser-service.ts
+src/app/project-service.ts
+src/app/compose-command-service.ts
+src/app/compose-file-resolver.ts
 ```
 
 Acceptance criteria:
@@ -120,6 +134,8 @@ Acceptance criteria:
 - Application services do not depend on Commander or Inquirer.
 - Tests cover application services directly.
 - Existing CLI behaviour remains unchanged.
+
+Status: in progress through PR #20.
 
 ### Step 3 — Add `compose ui` with a minimal local server
 

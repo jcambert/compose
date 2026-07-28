@@ -95,7 +95,7 @@ export function parseImportedWorkspaceConfig(content: string, sourceName = 'conf
     parsedValue = JSON.parse(content);
   } catch (error) {
     const details = error instanceof Error ? error.message : 'Invalid JSON.';
-    throw new Error(`Invalid compose config in ${sourceName}: ${details}`);
+    throw new Error(`Invalid compose config in ${sourceName}: ${details}`, { cause: error });
   }
 
   return validateImportedWorkspaceConfig(parsedValue, sourceName);

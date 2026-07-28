@@ -16,7 +16,7 @@ The primary product remains the CLI. The GUI is an optional local interface laun
 - Workspaces, favorites and recent stacks for daily usage.
 - Safe Docker Compose command generation and execution.
 - Guided command option selection.
-- Diagnostics through `compose doctor`.
+- Diagnostics through `compose doctor` and structured command failure reporting.
 - Stable JSON outputs and reusable application services.
 - Optional local GUI launched by `compose ui`.
 - Local UI runtime and log streaming through Server-Sent Events.
@@ -66,6 +66,7 @@ The following capabilities are already implemented or release-hardened:
 - Polished workspace management UI.
 - Read-only GUI streaming for runtime updates and logs.
 - Live streams panel UX fixes for close, selected stack synchronization and themed scrollbars.
+- Structured Docker Compose command failure diagnostics.
 
 ## Priority backlog
 
@@ -152,12 +153,14 @@ Status: runtime/log streaming completed in PR #34; UX polish completed in PR #35
 
 As a developer, I can understand Docker Compose command failures without digging through raw process output first.
 
-Tasks:
+Delivered behaviours:
 
-- Normalize common Docker CLI and Docker Compose failures.
-- Surface working directory, compose file path, command and exit code consistently.
-- Keep raw stdout/stderr available for troubleshooting.
-- Reuse the same error model from CLI and local UI.
+- Normalized failure kinds for unavailable Docker, missing Compose files and generic non-zero Docker Compose failures.
+- Diagnostic object attached to failed execution results.
+- Generated command, working directory, Compose file path and exit code surfaced consistently.
+- Raw stdout/stderr preserved on the diagnostic for troubleshooting.
+- Terminal execution with the default Docker runner prints an actionable diagnostic summary.
+- Local UI command execution receives the same typed execution result and diagnostic model.
 
 Acceptance criteria:
 
@@ -165,7 +168,7 @@ Acceptance criteria:
 - The typed result model remains compatible with current command execution.
 - Tests cover at least missing Docker, missing Compose file and non-zero command failure cases.
 
-Candidate PR: `feat: improve Docker Compose error reporting`.
+Status: completed in PR #36.
 
 ### P3 — Templates, to revalidate later
 
@@ -188,7 +191,6 @@ Acceptance criteria for future reconsideration:
 ## Recommended next PR order
 
 ```text
-#36 feat: improve Docker Compose error reporting
 #37 release: prepare v0.2.1
 ```
 

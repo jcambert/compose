@@ -14,11 +14,13 @@ The project follows a pragmatic semver policy:
 
 - Local UI workspace management: create saved workspaces, update an existing workspace path, select the current workspace and remove saved workspaces from `compose ui`.
 - Token-protected local workspace mutation endpoints used by the browser UI.
+- Token-protected Server-Sent Events endpoints for selected stack runtime updates and live Docker Compose log streaming in `compose ui`.
 
 ### Changed
 
 - The local UI now treats workspace configuration as a first-class browser workflow instead of a read-only status panel.
 - Workspace management UI polished with compact forms, readable path chips, edit mode, less aggressive destructive actions and explicit remove confirmation.
+- The local UI now exposes a live streams panel for runtime status and `docker compose logs --follow` output.
 
 ## 0.2.0 - Local UI, reusable services and large workspace hardening
 

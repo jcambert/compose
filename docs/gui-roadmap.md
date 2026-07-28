@@ -25,7 +25,7 @@ compose up --project ./infra --detach
 compose logs --project ./infra api --follow
 ```
 
-## Non-goals
+## Non-goals for the first GUI iterations
 
 The first GUI iterations must not introduce:
 
@@ -54,7 +54,7 @@ The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic po
 
 The React UI is bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
 
-The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.
+The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API, streaming endpoints and command preview model.
 
 ## Architectural rule
 
@@ -67,6 +67,7 @@ The GUI must reuse the same core primitives as the CLI:
 - Guided command descriptors.
 - Compose command preview.
 - Compose command execution.
+- Read-only runtime and log streaming.
 
 The CLI and GUI must both resolve actions into the same typed command intent model before execution. The GUI must never parse terminal help output or rebuild Docker Compose commands independently.
 
@@ -83,85 +84,29 @@ src/app/workspace-service.ts         manage workspaces and favorites
 src/app/stack-browser-service.ts     wire browsing to workspace persistence
 src/app/doctor-service.ts            expose diagnostics through the app boundary
 src/app/config-service.ts            expose config export/import/path/reset
-src/app/ui-server-service.ts         expose local GUI and JSON API
+src/app/ui-server-service.ts         expose local GUI, JSON API and SSE streams
 src/ui/                              React UI source bundled into dist/ui
 ```
-
-The `app` modules are introduced incrementally, not through a large rewrite.
 
 ## Delivered milestones
 
 ### Step 1 — Formalize GUI roadmap and product backlog
 
-Document the GUI direction, product boundaries, technology choice and backlog order.
-
 Status: completed in PR #19.
 
 ### Step 2 — Formalize reusable application services
-
-Extract and stabilize application services that can be called by both the CLI and the future GUI.
-
-Acceptance criteria:
-
-- CLI commands delegate to reusable services.
-- Application services do not depend on Commander or Inquirer.
-- Tests cover application services directly.
-- Existing CLI behaviour remains unchanged.
 
 Status: completed in PR #20.
 
 ### Step 3 — Add `compose ui` with a minimal local server
 
-Add a CLI command that starts a local-only HTTP server and exposes the first JSON endpoints.
-
-Initial endpoints:
-
-```text
-GET  /api/doctor
-GET  /api/workspaces
-GET  /api/stacks
-GET  /api/stacks/:id/runtime
-POST /api/commands/preview
-POST /api/commands/execute
-```
-
-Acceptance criteria:
-
-- The server binds to `127.0.0.1` by default.
-- The default port can be dynamic.
-- A local token protects API access.
-- Destructive actions require explicit confirmation data in the request.
-- The server can be tested without launching a browser.
-
 Status: completed in PR #23.
 
 ### Step 4 — Add the React GUI MVP
 
-Add a small React UI served by `compose ui`.
-
-MVP screens:
-
-- Doctor.
-- Workspaces.
-- Stack list.
-- Stack detail.
-- Service list.
-- Command preview.
-- Command execution result.
-
-MVP constraints:
-
-- The UI must show the generated `docker compose` command before executing meaningful operations.
-- Destructive operations such as `down`, `kill` and `rm` require visible confirmation.
-- The UI uses existing command descriptors and command intent models.
-- The UI remains optional and is not required for CLI usage.
-- The root page must include a visible fallback before React mounts.
-
 Status: completed in PR #24, with the local UI rendering regression fixed in PR #27.
 
 ### Step 5 — Improve terminal browser navigation
-
-Improve navigation when a workspace contains many stacks.
 
 Delivered behaviours:
 
@@ -174,8 +119,6 @@ Delivered behaviours:
 Status: completed in PR #25.
 
 ### Step 6 — Harden scanner behaviour for large directories
-
-Keep broad source scans practical and safe.
 
 Delivered behaviours:
 
@@ -192,45 +135,20 @@ Status: completed in PR #26.
 
 ### Step 7 — Prepare v0.2.0 release
 
-Prepare a release PR that updates version metadata and release notes after the stabilized UI and scanner milestones.
-
-Delivered outputs:
-
-```text
-package.json
-package-lock.json
-CHANGELOG.md
-README.md
-docs/releases/v0.2.0.md
-docs/release-readiness.md
-```
-
 Status: completed in PR #29.
 
 ### Step 8 — Bundle local GUI assets
 
-Move the React MVP from browser ESM imports to local bundled assets.
-
-Delivered outputs:
-
-```text
-src/ui/*
-dist/ui/index.html
-dist/ui/assets/*
-```
-
-Acceptance criteria:
+Delivered behaviours:
 
 - `compose ui` can run without downloading browser dependencies.
-- The npm package still remains CLI-first.
+- The npm package remains CLI-first.
 - The API contract does not change.
 - Missing source-built UI assets return a visible fallback instead of a blank page.
 
 Status: completed in PR #30.
 
 ### Step 9 — Improve local UI user experience and professional layout
-
-Move the bundled UI from a functional MVP toward a polished local admin console.
 
 Delivered behaviours:
 
@@ -244,62 +162,37 @@ Delivered behaviours:
 - Loading skeletons, empty states and error states.
 - Responsive desktop/tablet layout.
 
-Acceptance criteria:
-
-- The GUI is easier to understand on first launch.
-- The command safety model remains unchanged.
-- The local API contract does not change.
-- The CLI remains fully usable without the GUI.
-
 Status: completed in PR #31.
 
-### Step 10 — Manage workspaces from the local UI
-
-Promote workspace configuration from read-only status to a first-class browser workflow.
+### Step 10 — Manage and polish workspaces from the UI
 
 Delivered behaviours:
 
-- Dedicated Workspaces navigation entry.
-- Create a saved workspace from the browser.
-- Select the current workspace from the browser.
-- Remove a saved workspace from the browser through token-protected local endpoints.
-- Refresh stack data after workspace changes.
-- Keep command state safe after workspace changes.
+- Create saved workspaces from `compose ui`.
+- Select the current workspace from `compose ui`.
+- Remove a workspace with visible confirmation.
+- Edit the path of an existing workspace.
+- Keep the current workspace visually distinct.
+- Keep workspace changes local, token-protected and backed by the same config as the CLI.
 
-Status: completed in PR #32.
+Status: completed in PR #32 and polished in PR #33.
 
-### Step 11 — Polish workspace management UX
-
-Refine the workspace management screen after real UI feedback.
+### Step 11 — Add streaming for logs and runtime updates
 
 Delivered behaviours:
 
-- More compact add/edit form.
-- Edit mode for updating an existing workspace path.
-- Readable monospace path chips with overflow handling.
-- Clear current workspace state instead of a disabled Use button.
-- Less aggressive remove action.
-- Explicit remove confirmation before deletion.
-- Success and error feedback retained in the workspace panel.
+- `GET /api/events/runtime` streams selected stack runtime updates.
+- `GET /api/logs/stream` streams `docker compose logs --follow` output.
+- Streams remain local-only, token-protected and read-only.
+- The browser can stop log streaming without killing the UI server.
+- The local UI exposes a compact live streams panel.
+- WebSocket support remains out of scope until a concrete bidirectional use case exists.
 
-Status: completed in PR #33.
+Status: completed in PR #35.
 
 ## Next delivery plan
 
-### Step 12 — Add streaming for logs and runtime updates
-
-Use Server-Sent Events for long-running output and status refreshes.
-
-Candidate endpoints:
-
-```text
-GET /api/events/runtime
-GET /api/logs/stream
-```
-
-WebSocket support remains out of scope until a concrete bidirectional use case exists.
-
-### Step 13 — Improve Docker Compose error reporting
+### Step 12 — Improve Docker Compose error reporting
 
 Normalize common Docker and Docker Compose command failures for both CLI and UI display.
 
@@ -317,6 +210,7 @@ The local GUI must follow these rules:
 - Bind to `127.0.0.1` unless a future explicit remote mode is designed.
 - Use a short-lived local token.
 - Avoid broad filesystem APIs exposed to the browser.
+- Keep streaming endpoints read-only.
 - Keep Docker Compose command execution explicit and visible.
 - Require confirmations for destructive actions.
 - Support dry-run/preview flows wherever command execution is available.
@@ -327,7 +221,7 @@ A GUI task is allowed when it improves one of these goals:
 
 - Makes existing CLI capabilities easier to inspect or operate.
 - Reuses application services without duplicating logic.
-- Improves visibility of Docker Compose command previews, runtime status or diagnostics.
+- Improves visibility of Docker Compose command previews, runtime status, logs or diagnostics.
 - Keeps terminal workflows fully supported.
 
 A GUI task should be rejected or postponed when it requires:

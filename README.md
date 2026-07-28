@@ -15,7 +15,7 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Diagnose local setup with `compose doctor`.
-- Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks and preview commands.
+- Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks, stream runtime/logs and preview commands.
 - Keep command descriptors UI-neutral so CLI and GUI reuse the same application services.
 
 ## Installation
@@ -148,15 +148,7 @@ compose config reset
 compose config reset --yes
 ```
 
-`compose config` without a subcommand still delegates to `docker compose config` for the selected Compose project:
-
-```bash
-compose config --project ./infra --services
-compose config --project ./infra --quiet
-compose config --project ./infra --format json
-```
-
-See [`docs/config-management.md`](docs/config-management.md) for import validation and backup details.
+`compose config` without a subcommand still delegates to `docker compose config` for the selected Compose project.
 
 ## Workspaces and favorites
 
@@ -169,16 +161,6 @@ compose browse
 ```
 
 When `compose browse` is called without a root argument, it uses the current workspace root. If no workspace is configured, it falls back to the current directory.
-
-Workspace commands:
-
-```bash
-compose workspace add <name> <path>
-compose workspace remove <name>
-compose workspace use <name>
-compose workspace list
-compose workspace current
-```
 
 Favorites are scoped to the current workspace and are stored in the local user config file:
 
@@ -216,8 +198,6 @@ compose scan C:\Sources --json --max-depth 5 > stacks.json
 
 `compose scan --json` keeps JSON on stdout and writes scanner warnings to stderr so scripts can parse stdout safely.
 
-See [`docs/scanner-performance.md`](docs/scanner-performance.md) for the detailed safety model.
-
 ## Local UI
 
 `compose ui` starts an optional browser-based local interface from the CLI.
@@ -237,6 +217,7 @@ The local UI:
 - serves bundled React assets locally from `dist/ui`
 - shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews
 - manages saved workspaces from the browser: create, edit path, select current and remove with confirmation
+- streams selected stack runtime updates and live Docker Compose logs through Server-Sent Events
 - keeps the current workspace visually distinct and hides destructive removal behind an explicit confirmation
 - requires explicit confirmation before command execution
 - requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`
@@ -245,7 +226,9 @@ The browser UI is built by `npm run build` and packaged with the npm CLI. The br
 
 Workspace management in the UI uses the same local user config as the CLI. Saving an existing workspace name updates its path, switching workspace refreshes the stack scan, and removing a workspace requires a visible confirmation step.
 
-See [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
+Live streaming is read-only. It uses token-protected Server-Sent Events for selected stack runtime updates and `docker compose logs --follow` output.
+
+See [`docs/local-ui-server.md`](docs/local-ui-server.md), [`docs/gui-streaming.md`](docs/gui-streaming.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
 
 ## Guided mode
 
@@ -293,6 +276,7 @@ docs/
   compose-command-surface.md
   config-management.md
   gui-roadmap.md
+  gui-streaming.md
   local-ui-server.md
   browser-filtering-sorting.md
   scanner-performance.md
@@ -322,14 +306,6 @@ Run validation locally:
 npm run validate
 ```
 
-Run release-readiness checks directly:
-
-```bash
-npm run build
-npm run smoke
-npm run pack:dry-run
-```
-
 For local CLI testing:
 
 ```bash
@@ -353,6 +329,7 @@ See:
 - [`docs/compose-command-surface.md`](docs/compose-command-surface.md)
 - [`docs/config-management.md`](docs/config-management.md)
 - [`docs/local-ui-server.md`](docs/local-ui-server.md)
+- [`docs/gui-streaming.md`](docs/gui-streaming.md)
 - [`docs/gui-roadmap.md`](docs/gui-roadmap.md)
 - [`docs/backlog.md`](docs/backlog.md)
 - [`docs/browser-filtering-sorting.md`](docs/browser-filtering-sorting.md)

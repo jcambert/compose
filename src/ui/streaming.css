@@ -1,0 +1,90 @@
+.streaming-widget {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  width: min(34rem, calc(100vw - 2rem));
+  color: #e5e7eb;
+}
+
+.streaming-widget-toggle {
+  float: right;
+  border: 1px solid rgba(96, 165, 250, .45);
+  background: rgba(37, 99, 235, .92);
+  color: white;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .32);
+}
+
+.streaming-widget-panel {
+  clear: both;
+  display: grid;
+  gap: .75rem;
+  margin-top: .75rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, .96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .4);
+  backdrop-filter: blur(10px);
+}
+
+.streaming-widget.collapsed .streaming-widget-panel {
+  display: none;
+}
+
+.streaming-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.streaming-widget-header small {
+  color: #93c5fd;
+}
+
+.streaming-widget label {
+  display: grid;
+  gap: .35rem;
+  color: #cbd5e1;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.streaming-widget select {
+  min-width: 0;
+}
+
+.streaming-widget-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.streaming-widget-actions button {
+  padding: .6rem .75rem;
+}
+
+.streaming-widget-output {
+  min-height: 10rem;
+  max-height: 22rem;
+  margin: 0;
+  padding: .8rem;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: .75rem;
+  background: rgba(2, 6, 23, .86);
+  color: #dbeafe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .streaming-widget {
+    right: .75rem;
+    bottom: .75rem;
+    width: calc(100vw - 1.5rem);
+  }
+}

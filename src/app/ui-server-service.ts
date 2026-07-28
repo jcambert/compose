@@ -48,6 +48,24 @@ export type LocalUiServer = {
   close: () => Promise<void>;
 };
 
+export type LocalUiLogStreamInput = {
+  project: DiscoveredComposeProject;
+  serviceName?: string | undefined;
+  tail: string;
+  signal: AbortSignal;
+};
+
+export type LocalUiLogStreamEvent =
+  | {
+    stream: 'stdout' | 'stderr';
+    content: string;
+  }
+  | {
+    stream: 'exit';
+    exitCode: number | null;
+    signal: string | null;
+  };
+
 export type LocalUiServerDependencies = {
   openBrowser?: (url: string) => Promise<void> | void;
   runDoctor?: (options?: DoctorOptions) => Promise<DoctorReport>;
@@ -57,6 +75,7 @@ export type LocalUiServerDependencies = {
   removeWorkspace?: (input: WorkspaceNameInput) => Promise<unknown>;
   scanProjects?: (input: { root?: string; maxDepth?: number }) => Promise<DiscoveredComposeProject[]>;
   readRuntimeStatus?: (project: DiscoveredComposeProject) => Promise<StackRuntimeStatus>;
+  streamLogs?: (input: LocalUiLogStreamInput) => AsyncIterable<LocalUiLogStreamEvent>;
   previewCommand?: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
   executeCommand?: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
 };
@@ -70,6 +89,7 @@ type RuntimeDependencies = {
   removeWorkspace: (input: WorkspaceNameInput) => Promise<unknown>;
   scanProjects: (input: { root?: string; maxDepth?: number }) => Promise<DiscoveredComposeProject[]>;
   readRuntimeStatus: (project: DiscoveredComposeProject) => Promise<StackRuntimeStatus>;
+  streamLogs: (input: LocalUiLogStreamInput) => AsyncIterable<LocalUiLogStreamEvent>;
   previewCommand: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
   executeCommand: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
 };
@@ -255,6 +275,16 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/events/runtime') {
+      await streamRuntimeEvents(request, response, context, await resolveProjectFromQuery(url, context), url);
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/logs/stream') {
+      await streamLogEvents(request, response, context, await resolveProjectFromQuery(url, context), url);
+      return;
+    }
+
     const runtimeProjectId = matchStackRuntimePath(url.pathname);
 
     if (request.method === 'GET' && runtimeProjectId !== undefined) {
@@ -315,6 +345,7 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Run
     removeWorkspace: dependencies.removeWorkspace ?? removeWorkspaceEntry,
     scanProjects: dependencies.scanProjects ?? scanComposeProjects,
     readRuntimeStatus: dependencies.readRuntimeStatus ?? ((project) => readStackRuntimeStatus(project, {})),
+    streamLogs: dependencies.streamLogs ?? streamComposeLogs,
     previewCommand: dependencies.previewCommand ?? ((input) => previewComposeApplicationCommand(input)),
     executeCommand: dependencies.executeCommand ?? ((input) => executeComposeApplicationCommand(input, { processRunner: captureProcessRunner })),
   };
@@ -365,6 +396,85 @@ async function scanProjects(scanContext: StackScanContext, dependencies: Runtime
     root: scanContext.root,
     ...(scanContext.maxDepth === undefined ? {} : { maxDepth: scanContext.maxDepth }),
   });
+}
+
+async function resolveProjectFromQuery(url: URL, context: RequestContext): Promise<DiscoveredComposeProject> {
+  const stackId = readRequiredStringQuery(url, 'stackId');
+  const scanContext = await resolveStackScanContext(url, context);
+  const stacks = await scanProjects(scanContext, context.dependencies);
+  const project = findProject(stacks, stackId);
+
+  if (project === undefined) {
+    throw new LocalUiHttpError(404, 'stack-not-found', `Stack not found: ${stackId}`);
+  }
+
+  return project;
+}
+
+async function streamRuntimeEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: RequestContext,
+  project: DiscoveredComposeProject,
+  url: URL,
+): Promise<void> {
+  const signal = createRequestAbortSignal(request);
+  const intervalMs = normalizeStreamInterval(readOptionalIntegerQuery(url, 'intervalMs') ?? 5_000);
+
+  sendSseHeaders(response);
+  writeSseEvent(response, 'connected', { stream: 'runtime', projectId: project.id, intervalMs });
+
+  while (!signal.aborted && !response.destroyed) {
+    try {
+      writeSseEvent(response, 'runtime', await context.dependencies.readRuntimeStatus(project));
+    } catch (error) {
+      writeSseEvent(response, 'runtime-error', { message: error instanceof Error ? error.message : 'Runtime stream failed.' });
+    }
+
+    await delay(intervalMs, signal);
+  }
+
+  if (!response.destroyed) {
+    response.end();
+  }
+}
+
+async function streamLogEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: RequestContext,
+  project: DiscoveredComposeProject,
+  url: URL,
+): Promise<void> {
+  const signal = createRequestAbortSignal(request);
+  const serviceName = readOptionalStringQuery(url, 'service');
+  const tail = String(readOptionalIntegerQuery(url, 'tail') ?? 200);
+
+  sendSseHeaders(response);
+  writeSseEvent(response, 'connected', { stream: 'logs', projectId: project.id, serviceName: serviceName ?? null, tail });
+
+  try {
+    for await (const event of context.dependencies.streamLogs({ project, serviceName, tail, signal })) {
+      if (signal.aborted || response.destroyed) {
+        break;
+      }
+
+      if (event.stream === 'exit') {
+        writeSseEvent(response, 'logs-complete', event);
+        break;
+      }
+
+      writeSseEvent(response, 'log', event);
+    }
+  } catch (error) {
+    if (!signal.aborted && !response.destroyed) {
+      writeSseEvent(response, 'logs-error', { message: error instanceof Error ? error.message : 'Log stream failed.' });
+    }
+  }
+
+  if (!response.destroyed) {
+    response.end();
+  }
 }
 
 async function readTokenizedUiIndexHtml(context: RequestContext): Promise<string> {
@@ -627,6 +737,16 @@ function readOptionalStringQuery(url: URL, name: string): string | undefined {
   return value;
 }
 
+function readRequiredStringQuery(url: URL, name: string): string {
+  const value = readOptionalStringQuery(url, name);
+
+  if (value === undefined) {
+    throw new LocalUiHttpError(400, 'invalid-query', `${name} must be provided.`);
+  }
+
+  return value;
+}
+
 function readOptionalIntegerQuery(url: URL, name: string): number | undefined {
   const value = readOptionalStringQuery(url, name);
 
@@ -673,6 +793,114 @@ function matchStackRuntimePath(pathname: string): string | undefined {
 
 function findProject(projects: DiscoveredComposeProject[], id: string): DiscoveredComposeProject | undefined {
   return projects.find((project) => project.id === id || project.relativePath === id || project.composeFilePath === id);
+}
+
+async function* streamComposeLogs(input: LocalUiLogStreamInput): AsyncIterable<LocalUiLogStreamEvent> {
+  const args = ['compose', '-f', input.project.composeFilePath, 'logs', '--follow', '--tail', input.tail];
+
+  if (input.serviceName !== undefined) {
+    args.push(input.serviceName);
+  }
+
+  const child = spawn('docker', args, {
+    cwd: input.project.directoryPath,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const queue: LocalUiLogStreamEvent[] = [];
+  let completed = false;
+  let wake: (() => void) | undefined;
+  const push = (event: LocalUiLogStreamEvent) => {
+    queue.push(event);
+    wake?.();
+    wake = undefined;
+  };
+  const abort = () => {
+    if (!child.killed) {
+      child.kill();
+    }
+  };
+
+  child.stdout.on('data', (chunk: Buffer) => push({ stream: 'stdout', content: chunk.toString('utf-8') }));
+  child.stderr.on('data', (chunk: Buffer) => push({ stream: 'stderr', content: chunk.toString('utf-8') }));
+  child.on('error', (error) => push({ stream: 'stderr', content: error.message }));
+  child.on('close', (exitCode, signal) => {
+    completed = true;
+    push({ stream: 'exit', exitCode, signal });
+  });
+  input.signal.addEventListener('abort', abort, { once: true });
+
+  try {
+    while (!input.signal.aborted) {
+      if (queue.length === 0) {
+        if (completed) {
+          return;
+        }
+
+        await new Promise<void>((resolveWait) => {
+          wake = resolveWait;
+        });
+      }
+
+      while (queue.length > 0) {
+        const event = queue.shift();
+
+        if (event === undefined) {
+          continue;
+        }
+
+        yield event;
+
+        if (event.stream === 'exit') {
+          return;
+        }
+      }
+    }
+  } finally {
+    input.signal.removeEventListener('abort', abort);
+
+    if (!completed && !child.killed) {
+      child.kill();
+    }
+  }
+}
+
+function createRequestAbortSignal(request: IncomingMessage): AbortSignal {
+  const controller = new AbortController();
+  request.on('close', () => controller.abort());
+  return controller.signal;
+}
+
+function normalizeStreamInterval(value: number): number {
+  return Math.min(60_000, Math.max(1_000, value));
+}
+
+function sendSseHeaders(response: ServerResponse): void {
+  response.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-content-type-options': 'nosniff',
+  });
+  response.flushHeaders();
+}
+
+function writeSseEvent(response: ServerResponse, event: string, value: unknown): void {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(value)}\n\n`);
+}
+
+async function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return;
+  }
+
+  await new Promise<void>((resolveDelay) => {
+    const timeout = setTimeout(resolveDelay, milliseconds);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timeout);
+      resolveDelay();
+    }, { once: true });
+  });
 }
 
 function isAuthorized(request: IncomingMessage, url: URL, token: string): boolean {

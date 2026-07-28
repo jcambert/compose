@@ -1,0 +1,106 @@
+name: Patch error reporting
+
+on:
+  push:
+    branches:
+      - feat/compose-error-reporting
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'chore: apply error reporting UI patches') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: feat/compose-error-reporting
+
+      - name: Apply UI and CLI error reporting patches
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          program_path = Path('src/cli/program.ts')
+          program = program_path.read_text()
+          import_anchor = "import type { ComposeSubCommand } from '../compose/compose-command.js';\n"
+          import_line = "import { formatComposeExecutionDiagnostic } from '../compose/compose-error-reporting.js';\n"
+          if import_line not in program:
+              program = program.replace(import_anchor, import_anchor + import_line)
+
+          old_execute = """  if (result.dryRun) {
+            console.log(result.command);
+          }
+
+          if (result.exitCode !== 0) {
+            process.exitCode = result.exitCode;
+          }
+          """
+          new_execute = """  if (result.dryRun) {
+            console.log(result.command);
+          }
+
+          if (result.diagnostic !== undefined) {
+            console.error(`\\n${formatComposeExecutionDiagnostic(result.diagnostic)}`);
+          }
+
+          if (result.exitCode !== 0) {
+            process.exitCode = result.exitCode;
+          }
+          """
+          if old_execute not in program:
+              raise SystemExit('executeAndPrint block not found')
+          program = program.replace(old_execute, new_execute)
+          program_path.write_text(program)
+
+          app_path = Path('src/ui/App.tsx')
+          app = app_path.read_text()
+          app = app.replace(
+              "  type CommandRequest,\n  type ComposeExecutionResult,\n",
+              "  type CommandRequest,\n  type ComposeExecutionDiagnostic,\n  type ComposeExecutionResult,\n",
+          )
+          old_format = """function formatExecution(execution: ComposeExecutionResult): string {
+            return [
+              `command: ${execution.command}`,
+              `exitCode: ${execution.exitCode}`,
+              execution.stdout === '' ? undefined : `stdout:\\n${execution.stdout}`,
+              execution.stderr === '' ? undefined : `stderr:\\n${execution.stderr}`,
+            ].filter((line): line is string => line !== undefined).join('\\n\\n');
+          }
+          """
+          new_format = """function formatExecution(execution: ComposeExecutionResult): string {
+            return [
+              execution.diagnostic === undefined ? undefined : formatDiagnostic(execution.diagnostic),
+              `command: ${execution.command}`,
+              `exitCode: ${execution.exitCode}`,
+              execution.stdout === '' ? undefined : `stdout:\\n${execution.stdout}`,
+              execution.stderr === '' ? undefined : `stderr:\\n${execution.stderr}`,
+            ].filter((line): line is string => line !== undefined).join('\\n\\n');
+          }
+
+          function formatDiagnostic(diagnostic: ComposeExecutionDiagnostic): string {
+            return [
+              `diagnostic: ${diagnostic.title}`,
+              diagnostic.message,
+              `kind: ${diagnostic.kind}`,
+              `workingDirectory: ${diagnostic.workingDirectory}`,
+              `composeFilePath: ${diagnostic.composeFilePath}`,
+              diagnostic.hints.length === 0 ? undefined : `hints:\\n${diagnostic.hints.map((hint) => `- ${hint}`).join('\\n')}`,
+            ].filter((line): line is string => line !== undefined).join('\\n');
+          }
+          """
+          if old_format not in app:
+              raise SystemExit('formatExecution block not found')
+          app = app.replace(old_format, new_format)
+          app_path.write_text(app)
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "compose automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/cli/program.ts src/ui/App.tsx
+          git commit -m "chore: apply error reporting UI patches" || exit 0
+          git push origin feat/compose-error-reporting

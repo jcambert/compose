@@ -60,6 +60,11 @@ compose browse
 compose favorites add infra
 compose favorites list
 
+compose config path
+compose config export --output compose-config.backup.json
+compose config import compose-config.backup.json --yes
+compose config reset --yes
+
 compose scan .
 compose scan C:\Sources --json
 compose select .
@@ -122,6 +127,31 @@ compose doctor --skip-docker
 Standard mode returns a non-zero exit code for errors. Warnings, such as no current workspace, skipped Docker checks or a missing npm global directory in `PATH`, are shown but do not fail the command. Strict mode treats warnings as failures.
 
 On Windows, `compose doctor` helps diagnose the common case where `npm install -g @jc90100/compose` succeeded but PowerShell cannot find `compose` until the npm global prefix is added to `PATH` or the terminal is reopened.
+
+## Configuration management
+
+`compose` stores workspaces, favorites and recent stacks in a local user config file.
+
+```bash
+compose config path
+compose config path --json
+compose config export
+compose config export --output compose-config.backup.json
+compose config import compose-config.backup.json
+compose config import compose-config.backup.json --yes
+compose config reset
+compose config reset --yes
+```
+
+`compose config` without a subcommand still delegates to `docker compose config` for the selected Compose project:
+
+```bash
+compose config --project ./infra --services
+compose config --project ./infra --quiet
+compose config --project ./infra --format json
+```
+
+See [`docs/config-management.md`](docs/config-management.md) for import validation and backup details.
 
 ## Workspaces and favorites
 
@@ -254,6 +284,7 @@ docs/
   architecture.md
   cli-design.md
   compose-command-surface.md
+  config-management.md
   release.md
   backlog.md
   sprint-plan.md
@@ -296,6 +327,8 @@ npm link
 compose --help
 compose doctor
 compose workspace add dev C:\Sources
+compose config path
+compose config export
 compose browse --dry-run
 ```
 
@@ -308,6 +341,7 @@ See:
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/cli-design.md`](docs/cli-design.md)
 - [`docs/compose-command-surface.md`](docs/compose-command-surface.md)
+- [`docs/config-management.md`](docs/config-management.md)
 - [`docs/release.md`](docs/release.md)
 - [`docs/testing-strategy.md`](docs/testing-strategy.md)
 - [`docs/devops.md`](docs/devops.md)

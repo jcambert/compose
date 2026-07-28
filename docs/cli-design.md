@@ -25,6 +25,15 @@ compose favorites add <stack>
 compose favorites remove <stack>
 compose favorites list
 
+compose config path
+compose config path --json
+compose config export
+compose config export --output <file>
+compose config import <file>
+compose config import <file> --yes
+compose config reset
+compose config reset --yes
+
 compose up [services...]
 compose down
 compose create [services...]
@@ -38,7 +47,7 @@ compose rm [services...]
 compose ps [services...]
 compose logs [services...]
 compose build [services...]
-compose pull [services...]
+compose pull
 compose config
 compose cp <source> <target>
 compose events [services...]
@@ -63,6 +72,8 @@ compose project validate
 When `compose browse` is called without `[root]`, it uses the current workspace root. If no workspace is configured, it falls back to `.`.
 
 `exec` and `run` accept an omitted service only when `--guided` is used. Without guided resolution, Docker Compose still needs a service name.
+
+`compose config` without a subcommand remains the Docker Compose `config` passthrough. `compose config path/export/import/reset` targets the local `compose` user configuration file.
 
 ## Common Compose options
 
@@ -104,6 +115,36 @@ Options:
 Standard mode fails on errors only. Strict mode fails on errors and warnings.
 
 Installation and PATH issues are warnings by default because the CLI can still be executed from a direct local path, `npm link`, or a shell that has not been reopened yet. The JSON report uses stable check identifiers such as `compose-executable`, `npm-global-prefix` and `path-npm-prefix` so a future GUI can render targeted troubleshooting messages.
+
+## Configuration management
+
+The local user config stores workspaces, favorites and recent stacks. It is separate from Docker Compose YAML files.
+
+Commands:
+
+```bash
+compose config path
+compose config path --json
+compose config export
+compose config export --output compose-config.backup.json
+compose config import compose-config.backup.json
+compose config import compose-config.backup.json --yes
+compose config reset
+compose config reset --yes
+```
+
+Behaviour:
+
+- `config path` prints the resolved config path.
+- `config path --json` prints `{ "path": "..." }` for future GUI/API reuse.
+- `config export` prints normalized JSON to stdout.
+- `config export --output <file>` writes normalized JSON to a file.
+- `config import <file>` validates the backup and asks before replacing the current config.
+- `config import <file> --yes` validates and replaces without prompting.
+- `config reset` asks before saving an empty config.
+- `config reset --yes` saves an empty config without prompting.
+
+Import validation rejects invalid JSON, unsupported config versions, invalid workspace definitions, invalid favorite/recent stack entries and orphan workspace references before overwriting the current config.
 
 ## Workspaces and favorites
 

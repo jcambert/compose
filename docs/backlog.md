@@ -51,6 +51,8 @@ The following capabilities are already implemented or release-hardened:
 - Release workflow with npm Trusted Publishing.
 - Post-publication npm install verification.
 - GUI roadmap and CLI-first product backlog.
+- Reusable application service layer.
+- Hardened doctor installation, PATH, npm and version diagnostics.
 
 ## Priority backlog
 
@@ -99,7 +101,7 @@ Acceptance criteria:
 - A future GUI can scan projects, read diagnostics, manage workspaces and preview commands through the same service layer.
 - Existing CLI behaviour is preserved.
 
-Status: in progress through PR #20.
+Status: completed in PR #20.
 
 ### P1 — Doctor hardening
 
@@ -124,7 +126,7 @@ Acceptance criteria:
 - `compose doctor --json` returns a stable diagnostic model.
 - `compose doctor --skip-docker` remains usable in CI.
 
-Candidate PR: `feat: harden doctor diagnostics`.
+Status: completed in PR #21.
 
 ### P1 — Configuration management
 
@@ -148,7 +150,7 @@ Acceptance criteria:
 - Invalid imported config is rejected safely.
 - JSON output can be reused by the future GUI.
 
-Candidate PR: `feat: add config export and import`.
+Status: in progress through PR #22.
 
 ### P1 — Local UI server command
 

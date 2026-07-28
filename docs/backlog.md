@@ -53,6 +53,8 @@ The following capabilities are already implemented or release-hardened:
 - GUI roadmap and CLI-first product backlog.
 - Reusable application service layer.
 - Hardened doctor installation, PATH, npm and version diagnostics.
+- Local config export, import, path and reset commands.
+- Local UI server command through `compose ui`.
 
 ## Priority backlog
 
@@ -150,7 +152,7 @@ Acceptance criteria:
 - Invalid imported config is rejected safely.
 - JSON output can be reused by the future GUI.
 
-Status: in progress through PR #22.
+Status: completed in PR #22.
 
 ### P1 — Local UI server command
 
@@ -175,7 +177,7 @@ Acceptance criteria:
 - API endpoints call reusable application services.
 - Destructive command execution requires explicit confirmation data.
 
-Candidate PR: `feat: add local UI server command`.
+Status: completed in PR #23.
 
 ### P2 — React GUI MVP
 
@@ -185,8 +187,7 @@ As a developer, I can use an optional local web UI to inspect workspaces, stacks
 
 Tasks:
 
-- Add React + Vite + TypeScript UI app.
-- Serve the built UI through `compose ui`.
+- Add React UI shell served by `compose ui`.
 - Add Doctor screen.
 - Add Workspaces screen.
 - Add Stacks screen.
@@ -202,7 +203,7 @@ Acceptance criteria:
 - The GUI reuses application services through the local API.
 - The CLI remains fully usable without the GUI.
 
-Candidate PR: `feat: add React GUI MVP`.
+Status: in progress through PR #24.
 
 ### P2 — Browser usability
 
@@ -226,9 +227,30 @@ Acceptance criteria:
 
 Candidate PR: `feat: improve browser filtering and sorting`.
 
-### P2 — Scanner hardening
+### P2 — GUI asset pipeline
 
 #### User story P2.3
+
+As a maintainer, I can package the React GUI as local bundled assets when the MVP API and UX contract are stable.
+
+Tasks:
+
+- Add a dedicated GUI build pipeline.
+- Package browser assets under `dist` for npm distribution.
+- Keep the API contract compatible with the MVP.
+- Keep CLI builds and smoke tests fast.
+
+Acceptance criteria:
+
+- `compose ui` can run the GUI without relying on browser ESM imports.
+- The package still installs through npm as a CLI-first tool.
+- The GUI build does not rewrite the command model.
+
+Candidate PR: `build: bundle local GUI assets`.
+
+### P2 — Scanner hardening
+
+#### User story P2.4
 
 As a developer, I can scan large source folders without wasting time in noisy directories.
 
@@ -295,8 +317,9 @@ Acceptance criteria for future reconsideration:
 #22 feat: add config export and import
 #23 feat: add local UI server command
 #24 feat: add React GUI MVP
-#25 feat: improve browser filtering and sorting
-#26 perf: harden scanner exclusions
+#25 build: bundle local GUI assets
+#26 feat: improve browser filtering and sorting
+#27 perf: harden scanner exclusions
 ```
 
 ## Definition of done

@@ -1,8 +1,8 @@
-# Local UI Server
+# Local UI Server and React GUI MVP
 
 `compose ui` starts an optional browser-based local interface from the CLI.
 
-This is the first GUI readiness step. It does not introduce React yet and it does not change the CLI-first product direction.
+The primary product remains the CLI. The browser UI is a local adapter over the same application services and API endpoints used by the terminal workflow.
 
 ## Commands
 
@@ -33,6 +33,24 @@ API clients can also send the token with:
 ```text
 Authorization: Bearer <token>
 ```
+
+## React MVP
+
+The root page serves a React-based MVP shell that consumes the local JSON API.
+
+Initial UI sections:
+
+- Doctor diagnostics
+- Workspace status
+- Stack list
+- Stack detail
+- Service runtime summary
+- Docker Compose command preview
+- Command execution result
+
+The UI does not duplicate Docker Compose command generation. It posts command requests to the local API, then displays the generated `docker compose` command before execution.
+
+The MVP keeps the implementation intentionally light and dependency-free for the npm package. It uses browser ESM imports for React while the backend, safety model and API contract are stabilized. A later packaging step can replace this with a bundled offline asset pipeline without changing the API contract.
 
 ## Endpoints
 
@@ -137,7 +155,8 @@ Current constraints:
 - no broad filesystem API
 - no unauthenticated API route
 - destructive command execution requires explicit confirmation data
+- command preview is shown before execution
 
 ## Next step
 
-The next GUI step is the React MVP. It should consume these endpoints instead of duplicating CLI or Docker Compose command logic.
+The next GUI step is to improve the local UI with bundled assets, filtering, richer service details and eventually streaming logs/runtime updates through Server-Sent Events.

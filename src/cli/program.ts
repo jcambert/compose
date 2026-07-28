@@ -18,7 +18,6 @@ import {
 import type {
   ComposeApplicationCommandOptions,
   ComposeProjectServiceInput,
-  ScanWarning,
   UpdateComposeProjectServiceInput,
 } from '../app/index.js';
 import type { ComposeSubCommand } from '../compose/compose-command.js';
@@ -51,7 +50,7 @@ function registerScanCommand(program: Command): void {
     .option('--max-directories <count>', 'maximum directories to visit before aborting the scan', parseInteger)
     .option('--max-entries <count>', 'maximum directory entries to inspect before aborting the scan', parseInteger)
     .action(async (root: string, options: ScanCliOptions) => {
-      const scanWarnings: ScanWarning[] = [];
+      const scanWarnings: string[] = [];
       const projects = await scanComposeProjects({
         root,
         ...(options.maxDepth === undefined ? {} : { maxDepth: options.maxDepth }),
@@ -59,12 +58,12 @@ function registerScanCommand(program: Command): void {
         ...(options.maxDirectories === undefined ? {} : { maxDirectoriesVisited: options.maxDirectories }),
         ...(options.maxEntries === undefined ? {} : { maxEntriesVisited: options.maxEntries }),
         onWarning(warning) {
-          scanWarnings.push(warning);
+          scanWarnings.push(`${warning.path}: ${warning.message}`);
         },
       });
 
       for (const warning of scanWarnings) {
-        console.warn(`scan warning: ${warning.path}: ${warning.message}`);
+        console.warn(`scan warning: ${warning}`);
       }
 
       if (options.json === true) {

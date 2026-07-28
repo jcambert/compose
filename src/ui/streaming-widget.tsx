@@ -58,16 +58,19 @@ export function mountStreamingWidget(token: string): void {
     state.logSource = undefined;
   }
 
-  function closeStreams(): void {
+  function stopStreams(): void {
     closeRuntimeStream();
     closeLogStream();
+  }
+
+  function closeStreams(): void {
+    stopStreams();
     state.status = 'Streams stopped';
     render();
   }
 
   function closePanel(): void {
-    closeRuntimeStream();
-    closeLogStream();
+    stopStreams();
     state.status = 'Panel closed';
     setCollapsed(true);
     render();
@@ -80,6 +83,37 @@ export function mountStreamingWidget(token: string): void {
 
   function selectedStack() {
     return state.stacks.find((stack) => stack.id === state.selectedStackId);
+  }
+
+  function selectStack(stackId: string, clearOutput: boolean): void {
+    const stack = state.stacks.find((candidate) => candidate.id === stackId);
+
+    if (stack === undefined) {
+      return;
+    }
+
+    const changed = state.selectedStackId !== stack.id;
+    state.selectedStackId = stack.id;
+    state.selectedService = '';
+
+    if (changed) {
+      stopStreams();
+      state.status = `Selected ${stack.name}`;
+    }
+
+    if (clearOutput) {
+      state.output = [];
+    }
+
+    render();
+  }
+
+  function selectStackByName(name: string, clearOutput: boolean): void {
+    const stack = state.stacks.find((candidate) => candidate.name === name);
+
+    if (stack !== undefined) {
+      selectStack(stack.id, clearOutput);
+    }
   }
 
   async function loadStacks(): Promise<void> {
@@ -98,9 +132,21 @@ export function mountStreamingWidget(token: string): void {
       }
 
       const result = await response.json() as StackListResult;
+      const selectedPageStackName = readSelectedStackNameFromPage();
+      const selectedPageStack = selectedPageStackName === undefined
+        ? undefined
+        : result.stacks.find((stack) => stack.name === selectedPageStackName);
+      const fallbackStackId = selectedPageStack?.id ?? state.selectedStackId === '' ? result.stacks[0]?.id ?? '' : state.selectedStackId;
+      const changed = state.selectedStackId !== '' && state.selectedStackId !== fallbackStackId;
+
       state.stacks = result.stacks;
-      state.selectedStackId = state.selectedStackId === '' ? result.stacks[0]?.id ?? '' : state.selectedStackId;
+      state.selectedStackId = fallbackStackId;
       state.status = result.stacks.length === 0 ? 'No stack available' : 'Ready';
+
+      if (changed) {
+        stopStreams();
+        state.output = [];
+      }
     } catch (error) {
       state.status = error instanceof Error ? error.message : 'Unable to load stacks';
     }
@@ -191,12 +237,26 @@ export function mountStreamingWidget(token: string): void {
   }
 
   function toggle(): void {
-    setCollapsed(!root.classList.contains('collapsed'));
+    const nextCollapsed = !root.classList.contains('collapsed');
+
+    if (!nextCollapsed) {
+      syncFromPageSelection(true);
+    }
+
+    setCollapsed(nextCollapsed);
   }
 
   function setCollapsed(collapsed: boolean): void {
     root.classList.toggle('collapsed', collapsed);
     writeCollapsedPreference(collapsed);
+  }
+
+  function syncFromPageSelection(clearOutput: boolean): void {
+    const selectedPageStackName = readSelectedStackNameFromPage();
+
+    if (selectedPageStackName !== undefined) {
+      selectStackByName(selectedPageStackName, clearOutput);
+    }
   }
 
   function render(): void {
@@ -239,10 +299,7 @@ export function mountStreamingWidget(token: string): void {
     root.querySelector<HTMLButtonElement>('.streaming-widget-toggle')?.addEventListener('click', toggle);
     root.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener('click', closePanel);
     root.querySelector<HTMLSelectElement>('[data-role="stack"]')?.addEventListener('change', (event) => {
-      state.selectedStackId = event.currentTarget.value;
-      state.selectedService = '';
-      closeStreams();
-      render();
+      selectStack(event.currentTarget.value, true);
     });
     root.querySelector<HTMLSelectElement>('[data-role="service"]')?.addEventListener('change', (event) => {
       state.selectedService = event.currentTarget.value;
@@ -260,7 +317,25 @@ export function mountStreamingWidget(token: string): void {
     }
   }
 
+  function handleDocumentClick(event: MouseEvent): void {
+    const target = event.target instanceof Element ? event.target : undefined;
+    const stackCard = target?.closest('.stack-card');
+
+    if (stackCard === undefined || stackCard === null) {
+      return;
+    }
+
+    const stackName = stackCard.querySelector('strong')?.textContent?.trim();
+
+    if (stackName === undefined || stackName.length === 0) {
+      return;
+    }
+
+    window.setTimeout(() => selectStackByName(stackName, true), 0);
+  }
+
   window.addEventListener('keydown', handleKeydown);
+  document.addEventListener('click', handleDocumentClick, true);
   window.addEventListener('beforeunload', closeStreams);
   render();
   void loadStacks();
@@ -272,6 +347,11 @@ function readSse<T>(event: Event): T | undefined {
   } catch {
     return undefined;
   }
+}
+
+function readSelectedStackNameFromPage(): string | undefined {
+  const value = document.querySelector('.stack-card.selected strong')?.textContent?.trim();
+  return value === undefined || value.length === 0 ? undefined : value;
 }
 
 function readCollapsedPreference(): boolean {

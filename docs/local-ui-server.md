@@ -62,6 +62,7 @@ Main areas:
 - Stack browser with client-side search and sorting.
 - Stack detail panel with services, runtime status, ports and container names when available.
 - Command workflow with a clear preview, confirmation and execution sequence.
+- Live streams panel for runtime updates and Docker Compose logs.
 - Professional loading, empty and error states.
 
 The UI still does not duplicate Docker Compose command generation. It posts command requests to the local API, then displays the generated `docker compose` command before execution.
@@ -77,6 +78,8 @@ POST   /api/workspaces/current
 DELETE /api/workspaces/:name
 GET    /api/stacks
 GET    /api/stacks/:id/runtime
+GET    /api/events/runtime
+GET    /api/logs/stream
 POST   /api/commands/preview
 POST   /api/commands/execute
 ```
@@ -136,6 +139,23 @@ GET /api/stacks?root=C:\Sources
 GET /api/stacks?workspace=dev
 GET /api/stacks?maxDepth=6
 ```
+
+## Streaming
+
+The local UI exposes read-only Server-Sent Events streams for live runtime and log updates.
+
+```text
+GET /api/events/runtime?stackId=<stack-id>&intervalMs=5000
+GET /api/logs/stream?stackId=<stack-id>&service=<service>&tail=200
+```
+
+Runtime streaming periodically reuses the same runtime status reader used by the stack detail panel. Log streaming runs:
+
+```bash
+docker compose -f <compose-file> logs --follow --tail <tail> [service]
+```
+
+The log child process is stopped when the browser closes the stream or the user stops streaming from the UI. See [`docs/gui-streaming.md`](gui-streaming.md) for the detailed event contract.
 
 ## Command preview
 
@@ -198,7 +218,7 @@ kill
 rm
 ```
 
-The browser UI makes this flow explicit: preview first, normal confirmation second, destructive confirmation third when the selected command requires it.
+The browser UI makes this flow explicit: preview first, normal confirmation second, destructive confirmation third when the selected command requires it. Live streams are read-only and do not bypass command confirmation rules.
 
 ## Safety constraints
 
@@ -212,9 +232,10 @@ Current constraints:
 - no broad filesystem API
 - no unauthenticated API route
 - workspace mutation endpoints stay token-protected and local-only
+- streaming endpoints stay token-protected and read-only
 - destructive command execution requires explicit confirmation data
 - command preview is shown before execution
 
 ## Next step
 
-The next GUI hardening step is streaming logs/runtime updates through Server-Sent Events. Richer command error reporting can follow without changing the local API safety model.
+The next GUI hardening step is richer Docker Compose error reporting for both terminal and local UI flows.

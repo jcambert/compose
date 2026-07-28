@@ -9,6 +9,7 @@ import type { LocalUiServer, LocalUiServerDependencies, LocalUiServerOptions } f
 import type { BuiltComposeCommand } from '../../src/compose/compose-command.js';
 import type { StackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../../src/scanner/discovered-project.js';
+import type { WorkspaceDefinition } from '../../src/workspace/workspace-config.js';
 
 const token = 'test-token';
 const project: DiscoveredComposeProject = {
@@ -61,6 +62,9 @@ function createDependencies(overrides: LocalUiServerDependencies = {}): LocalUiS
       ],
       currentWorkspaceName: 'dev',
     }),
+    addWorkspace: async () => undefined,
+    setWorkspace: async () => undefined,
+    removeWorkspace: async () => undefined,
     scanProjects: async () => [project],
     readRuntimeStatus: async () => runtimeStatus,
     previewCommand: async (input: ComposeApplicationCommandInput): Promise<BuiltComposeCommand> => ({
@@ -106,6 +110,58 @@ describe('local UI server application service', () => {
       expect(workspaces).toMatchObject({ currentWorkspaceName: 'dev' });
       expect(stacks).toMatchObject({ root: '/workspace', workspaceName: 'dev' });
       expect((stacks.stacks as DiscoveredComposeProject[])[0]).toMatchObject({ id: 'infra-compose-yaml' });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('manages workspaces through token-protected local API endpoints', async () => {
+    let currentWorkspaceName: string | undefined = 'dev';
+    let workspaces: WorkspaceDefinition[] = [
+      {
+        name: 'dev',
+        path: '/workspace',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const server = await startTestServer({
+      listWorkspaces: async () => ({
+        workspaces,
+        ...(currentWorkspaceName === undefined ? {} : { currentWorkspaceName }),
+      }),
+      addWorkspace: async (input) => {
+        workspaces = [
+          ...workspaces.filter((workspace) => workspace.name !== input.name),
+          {
+            name: input.name,
+            path: input.path,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ];
+      },
+      setWorkspace: async (input) => {
+        currentWorkspaceName = input.name;
+      },
+      removeWorkspace: async (input) => {
+        workspaces = workspaces.filter((workspace) => workspace.name !== input.name);
+        if (currentWorkspaceName === input.name) {
+          currentWorkspaceName = workspaces[0]?.name;
+        }
+      },
+    });
+
+    try {
+      const created = await postJson(server, '/api/workspaces', { name: 'demo', path: '/workspace/demo' });
+      const selected = await postJson(server, '/api/workspaces/current', { name: 'demo' });
+      const removed = await deleteJson(server, '/api/workspaces/dev');
+      const invalid = await post(server, '/api/workspaces', { name: '', path: '/empty' });
+
+      expect((created.workspaces as WorkspaceDefinition[]).map((workspace) => workspace.name)).toEqual(['dev', 'demo']);
+      expect(selected).toMatchObject({ currentWorkspaceName: 'demo' });
+      expect((removed.workspaces as WorkspaceDefinition[]).map((workspace) => workspace.name)).toEqual(['demo']);
+      expect(invalid.status).toBe(400);
     } finally {
       await server.close();
     }
@@ -298,6 +354,16 @@ async function post(server: LocalUiServer, path: string, body: Record<string, un
     },
     body: JSON.stringify(body),
   });
+}
+
+async function deleteJson(server: LocalUiServer, path: string): Promise<Record<string, unknown>> {
+  const response = await fetch(apiUrl(server, path), {
+    method: 'DELETE',
+    headers: authorizationHeaders(),
+  });
+
+  expect(response.status).toBe(200);
+  return await response.json() as Record<string, unknown>;
 }
 
 function apiUrl(server: LocalUiServer, path: string): string {

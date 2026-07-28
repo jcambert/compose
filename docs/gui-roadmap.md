@@ -49,9 +49,9 @@ The preferred implementation path is:
 - Streaming: Server-Sent Events first for logs and runtime status updates.
 - WebSocket: only later, if an interactive terminal-like experience is required.
 
-The GUI is served by the CLI from `127.0.0.1` only. It should choose a free dynamic port by default and protect the session with a short-lived local token.
+The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic port by default and protects the session with a short-lived local token.
 
-The first React MVP keeps packaging simple by serving a React browser shell directly from `compose ui`. A later build step can package bundled offline GUI assets once the UI/API contract is stable.
+The current React MVP keeps packaging simple by serving a browser shell directly from `compose ui`. It now has a rendering fallback and a regression fix for invalid generated JavaScript. A later build step should package bundled offline GUI assets once the UI/API contract is stable.
 
 ## Architectural rule
 
@@ -102,7 +102,7 @@ src/
 
 The `app` modules are introduced incrementally, not through a large rewrite.
 
-## Delivery plan
+## Delivered milestones
 
 ### Step 1 — Formalize GUI roadmap and product backlog
 
@@ -194,12 +194,68 @@ MVP constraints:
 - Destructive operations such as `down`, `kill` and `rm` require visible confirmation.
 - The UI uses existing command descriptors and command intent models.
 - The UI remains optional and is not required for CLI usage.
+- The root page must include a visible fallback before React mounts.
 
-Status: in progress through PR #24.
+Status: completed in PR #24, with the local UI rendering regression fixed in PR #27.
 
-### Step 5 — Bundle local GUI assets
+### Step 5 — Improve terminal browser navigation
 
-Move the React MVP from browser ESM imports to local bundled assets once the UX and API contract are stable.
+Improve navigation when a workspace contains many stacks.
+
+Delivered behaviours:
+
+- `compose browse --filter <text>`.
+- `compose browse --sort name|path|services|runtime`.
+- Equivalent options through `compose stacks`.
+- Favorites remain prioritized.
+- Refresh and quit actions remain available when filters hide all stacks.
+
+Status: completed in PR #25.
+
+### Step 6 — Harden scanner behaviour for large directories
+
+Keep broad source scans practical and safe.
+
+Delivered behaviours:
+
+- Expanded default exclusions.
+- Case-insensitive directory exclusions.
+- Symbolic link skipping.
+- Scan guard rails for visited directories and inspected entries.
+- `compose scan --exclude`.
+- `compose scan --max-directories`.
+- `compose scan --max-entries`.
+- JSON stdout stays parseable while scan warnings go to stderr.
+
+Status: completed in PR #26.
+
+## Next delivery plan
+
+### Step 7 — Prepare v0.2.0 release
+
+Prepare a release PR that updates version metadata and release notes after the stabilized UI and scanner milestones.
+
+Candidate outputs:
+
+```text
+package.json
+package-lock.json
+CHANGELOG.md
+README.md if command examples are stale
+```
+
+Acceptance criteria:
+
+- Version metadata is bumped consistently.
+- Release notes include PR #19 through PR #28.
+- Local validation and CI are green.
+- npm publish remains handled by the existing Trusted Publishing release workflow.
+
+Candidate PR: `release: prepare v0.2.0`.
+
+### Step 8 — Bundle local GUI assets
+
+Move the React MVP from browser ESM imports to local bundled assets once the v0.2.0 release decision is made.
 
 Candidate outputs:
 
@@ -214,7 +270,9 @@ Acceptance criteria:
 - The npm package still remains CLI-first.
 - The API contract does not change.
 
-### Step 6 — Add streaming for logs and runtime updates
+Candidate PR: `build: bundle local GUI assets`.
+
+### Step 9 — Add streaming for logs and runtime updates
 
 Use Server-Sent Events for long-running output and status refreshes.
 

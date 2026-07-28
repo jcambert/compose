@@ -25,7 +25,7 @@ compose up --project ./infra --detach
 compose logs --project ./infra api --follow
 ```
 
-## Non-goals for the first GUI iterations
+## Non-goals
 
 The first GUI iterations must not introduce:
 
@@ -54,7 +54,7 @@ The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic po
 
 The React UI is bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
 
-The current UI is organized as a professional local admin console with Dashboard, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.
+The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API and command preview model.
 
 ## Architectural rule
 
@@ -72,8 +72,6 @@ The CLI and GUI must both resolve actions into the same typed command intent mod
 
 ## Current module direction
 
-The CLI now routes through an application service boundary that is shared by future adapters.
-
 Current app boundary:
 
 ```text
@@ -87,22 +85,6 @@ src/app/doctor-service.ts            expose diagnostics through the app boundary
 src/app/config-service.ts            expose config export/import/path/reset
 src/app/ui-server-service.ts         expose local GUI and JSON API
 src/ui/                              React UI source bundled into dist/ui
-```
-
-Target direction:
-
-```text
-src/
-  app/           reusable application services shared by CLI and GUI adapters
-  cli/           terminal entrypoint, command registration and terminal adapters
-  compose/       Docker Compose command model, builder and executor
-  doctor/        diagnostics model and runner
-  guided/        UI-neutral command descriptors
-  interactive/   stack/service browsing workflow
-  scanner/       Compose discovery
-  ui/            bundled React UI source
-  workspace/     local workspaces, favorites and recents
-  yaml/          Compose YAML parser/writer
 ```
 
 The `app` modules are introduced incrementally, not through a large rewrite.
@@ -131,15 +113,6 @@ Status: completed in PR #20.
 ### Step 3 — Add `compose ui` with a minimal local server
 
 Add a CLI command that starts a local-only HTTP server and exposes the first JSON endpoints.
-
-Initial command shape:
-
-```bash
-compose ui
-compose ui --port 0
-compose ui --workspace dev
-compose ui --no-open
-```
 
 Initial endpoints:
 
@@ -280,9 +253,40 @@ Acceptance criteria:
 
 Status: completed in PR #31.
 
+### Step 10 — Manage workspaces from the local UI
+
+Promote workspace configuration from read-only status to a first-class browser workflow.
+
+Delivered behaviours:
+
+- Dedicated Workspaces navigation entry.
+- Create a saved workspace from the browser.
+- Select the current workspace from the browser.
+- Remove a saved workspace from the browser through token-protected local endpoints.
+- Refresh stack data after workspace changes.
+- Keep command state safe after workspace changes.
+
+Status: completed in PR #32.
+
+### Step 11 — Polish workspace management UX
+
+Refine the workspace management screen after real UI feedback.
+
+Delivered behaviours:
+
+- More compact add/edit form.
+- Edit mode for updating an existing workspace path.
+- Readable monospace path chips with overflow handling.
+- Clear current workspace state instead of a disabled Use button.
+- Less aggressive remove action.
+- Explicit remove confirmation before deletion.
+- Success and error feedback retained in the workspace panel.
+
+Status: completed in PR #33.
+
 ## Next delivery plan
 
-### Step 10 — Add streaming for logs and runtime updates
+### Step 12 — Add streaming for logs and runtime updates
 
 Use Server-Sent Events for long-running output and status refreshes.
 
@@ -295,7 +299,7 @@ GET /api/logs/stream
 
 WebSocket support remains out of scope until a concrete bidirectional use case exists.
 
-### Step 11 — Improve Docker Compose error reporting
+### Step 13 — Improve Docker Compose error reporting
 
 Normalize common Docker and Docker Compose command failures for both CLI and UI display.
 

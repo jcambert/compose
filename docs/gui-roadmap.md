@@ -54,7 +54,7 @@ The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic po
 
 The React UI is bundled during the normal build and served from local package assets. The browser does not need to download React from an external ESM/CDN source at runtime.
 
-The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API, streaming endpoints and command preview model.
+The current UI is organized as a professional local admin console with Dashboard, Workspaces, Stacks, Doctor and Commands sections. It remains CLI-first and continues to reuse the same local API, streaming endpoints, command preview model and command failure diagnostic model.
 
 ## Architectural rule
 
@@ -67,6 +67,7 @@ The GUI must reuse the same core primitives as the CLI:
 - Guided command descriptors.
 - Compose command preview.
 - Compose command execution.
+- Compose command failure diagnostics.
 - Read-only runtime and log streaming.
 
 The CLI and GUI must both resolve actions into the same typed command intent model before execution. The GUI must never parse terminal help output or rebuild Docker Compose commands independently.
@@ -85,6 +86,7 @@ src/app/stack-browser-service.ts     wire browsing to workspace persistence
 src/app/doctor-service.ts            expose diagnostics through the app boundary
 src/app/config-service.ts            expose config export/import/path/reset
 src/app/ui-server-service.ts         expose local GUI, JSON API and SSE streams
+src/compose/compose-error-reporting.ts normalize Docker Compose command failures
 src/ui/                              React UI source bundled into dist/ui
 ```
 
@@ -193,18 +195,24 @@ Delivered behaviours:
 
 Status: runtime/log streaming completed in PR #34; Live streams UX polish completed in PR #35.
 
-## Next delivery plan
-
 ### Step 12 — Improve Docker Compose error reporting
 
-Normalize common Docker and Docker Compose command failures for both CLI and UI display.
+Delivered behaviours:
 
-Candidate behaviours:
+- Failed command results include a structured `diagnostic` object.
+- The diagnostic identifies unavailable Docker, missing Compose files and generic non-zero Docker Compose failures.
+- Generated command, working directory, Compose file path and exit code are surfaced consistently.
+- Raw stdout/stderr remain available for troubleshooting.
+- Terminal execution with the default Docker runner prints the diagnostic summary.
+- Local UI command execution receives the same typed execution result model.
 
-- show command, working directory, compose file path and exit code consistently
-- keep raw stdout/stderr available
-- add actionable hints for Docker unavailable, Compose file missing and non-zero command failures
-- reuse the same model in terminal and local UI flows
+Status: completed in PR #36.
+
+## Next delivery plan
+
+### Step 13 — Prepare v0.2.1 release
+
+Prepare the next post-`v0.2.0` release with workspace UI management, GUI streaming, live streams UX fixes and structured command diagnostics.
 
 ## Security and safety requirements
 
@@ -217,6 +225,7 @@ The local GUI must follow these rules:
 - Keep Docker Compose command execution explicit and visible.
 - Require confirmations for destructive actions.
 - Support dry-run/preview flows wherever command execution is available.
+- Keep command diagnostics read-only and avoid hiding raw Docker Compose output.
 
 ## Decision rules for future GUI work
 

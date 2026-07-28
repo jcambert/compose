@@ -15,12 +15,14 @@ export type ScanWarning = {
 export type ScanLimitName = 'maxDirectoriesVisited' | 'maxEntriesVisited';
 
 export class ScanLimitExceededError extends Error {
-  constructor(
-    readonly limitName: ScanLimitName,
-    readonly limit: number,
-  ) {
+  readonly limitName: ScanLimitName;
+  readonly limit: number;
+
+  constructor(limitName: ScanLimitName, limit: number) {
     super(`Scanner limit exceeded: ${limitName}=${limit}. Narrow the root, increase the limit, or add directory exclusions.`);
     this.name = 'ScanLimitExceededError';
+    this.limitName = limitName;
+    this.limit = limit;
   }
 }
 

@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { confirm, select } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import { Command } from 'commander';
 import {
   addComposeProjectService,
@@ -262,7 +262,7 @@ function registerLocalConfigCommands(configCommand: Command): void {
     .command('path')
     .description('Print the local compose user config path.')
     .option('--json', 'print the config path as JSON')
-    .action(async (options: ConfigPathCliOptions) => {
+    .action((options: ConfigPathCliOptions) => {
       const result = getConfigPath();
 
       if (options.json === true) {
@@ -297,9 +297,9 @@ function registerLocalConfigCommands(configCommand: Command): void {
     .option('--yes', 'overwrite the current config without asking for confirmation')
     .action(async (filePath: string, options: ConfigImportCliOptions) => {
       if (options.yes !== true) {
-        const shouldImport = await confirm({
+        const shouldImport = await inquirerPromptAdapter.confirm({
           message: 'Importing config will replace the current workspaces, favorites and recents. Continue?',
-          default: false,
+          defaultValue: false,
         });
 
         if (!shouldImport) {
@@ -320,9 +320,9 @@ function registerLocalConfigCommands(configCommand: Command): void {
     .option('--yes', 'reset the current config without asking for confirmation')
     .action(async (options: ConfigResetCliOptions) => {
       if (options.yes !== true) {
-        const shouldReset = await confirm({
+        const shouldReset = await inquirerPromptAdapter.confirm({
           message: 'Resetting config will remove all workspaces, favorites and recents. Continue?',
-          default: false,
+          defaultValue: false,
         });
 
         if (!shouldReset) {

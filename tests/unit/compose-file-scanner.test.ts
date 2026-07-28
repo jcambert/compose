@@ -2,7 +2,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { scanComposeFiles, ScanLimitExceededError } from '../../src/scanner/compose-file-scanner.js';
+import { scanComposeFiles } from '../../src/scanner/compose-file-scanner.js';
 
 const tempDirectories: string[] = [];
 
@@ -69,7 +69,7 @@ describe('compose file scanner', () => {
       name: 'ScanLimitExceededError',
       limitName: 'maxDirectoriesVisited',
       limit: 1,
-    } satisfies Partial<ScanLimitExceededError>);
+    });
   });
 
   it('fails fast when the scanned entry limit is exceeded', async () => {
@@ -81,21 +81,12 @@ describe('compose file scanner', () => {
       name: 'ScanLimitExceededError',
       limitName: 'maxEntriesVisited',
       limit: 1,
-    } satisfies Partial<ScanLimitExceededError>);
+    });
   });
 
-  it('reports unreadable nested directories through warnings instead of failing the whole scan', async () => {
+  it('rejects invalid scanner limits before traversal', async () => {
     const root = await createTempRoot();
-    const warningMessages: string[] = [];
-    await writeComposeFile(join(root, 'app'), 'api');
 
-    const projects = await scanComposeFiles(root, {
-      onWarning(warning) {
-        warningMessages.push(`${warning.type}:${warning.path}`);
-      },
-    });
-
-    expect(projects).toHaveLength(1);
-    expect(warningMessages).toEqual([]);
+    await expect(scanComposeFiles(root, { maxEntriesVisited: 0 })).rejects.toThrow('Invalid maxEntriesVisited');
   });
 });

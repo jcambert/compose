@@ -96,10 +96,14 @@ compose project validate --project ./my-stack
 
 ## Diagnostics
 
-`compose doctor` checks the local runtime before daily usage or before opening an issue.
+`compose doctor` checks the local runtime and installation before daily usage or before opening an issue.
 
 It verifies:
 
+- installed `compose` CLI package version
+- `compose` executable discovery through `PATH`
+- npm global prefix resolution
+- whether the npm global executable directory is present in `PATH`
 - Node.js `20.19.0+`
 - Docker CLI availability
 - `docker compose version`
@@ -115,7 +119,9 @@ compose doctor --strict
 compose doctor --skip-docker
 ```
 
-Standard mode returns a non-zero exit code for errors. Warnings, such as no current workspace, are shown but do not fail the command. Strict mode treats warnings as failures.
+Standard mode returns a non-zero exit code for errors. Warnings, such as no current workspace, skipped Docker checks or a missing npm global directory in `PATH`, are shown but do not fail the command. Strict mode treats warnings as failures.
+
+On Windows, `compose doctor` helps diagnose the common case where `npm install -g @jc90100/compose` succeeded but PowerShell cannot find `compose` until the npm global prefix is added to `PATH` or the terminal is reopened.
 
 ## Workspaces and favorites
 
@@ -234,6 +240,7 @@ compose up --project ./infra --guided --yes --dry-run
 
 ```text
 src/
+  app/          reusable application services for CLI and future GUI adapters
   cli/          terminal entrypoint, command registration and terminal adapters
   compose/      Docker Compose command building and execution
   doctor/       local diagnostic checks

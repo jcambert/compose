@@ -7,7 +7,6 @@ on:
       - 'feature/**'
       - 'fix/**'
       - 'chore/**'
-      - 'feat/**'
   pull_request:
     branches:
       - main
@@ -48,14 +47,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test with coverage
-        run: npm test > test.log 2>&1
-
-      - name: Upload test log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-log-${{ matrix.node-version }}
-          path: test.log
+        run: npm test
 
       - name: Build
         run: npm run build

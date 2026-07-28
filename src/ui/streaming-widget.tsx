@@ -136,7 +136,8 @@ export function mountStreamingWidget(token: string): void {
       const selectedPageStack = selectedPageStackName === undefined
         ? undefined
         : result.stacks.find((stack) => stack.name === selectedPageStackName);
-      const fallbackStackId = selectedPageStack?.id ?? state.selectedStackId === '' ? result.stacks[0]?.id ?? '' : state.selectedStackId;
+      const currentStackStillExists = result.stacks.some((stack) => stack.id === state.selectedStackId);
+      const fallbackStackId = selectedPageStack?.id ?? (currentStackStillExists ? state.selectedStackId : result.stacks[0]?.id ?? '');
       const changed = state.selectedStackId !== '' && state.selectedStackId !== fallbackStackId;
 
       state.stacks = result.stacks;

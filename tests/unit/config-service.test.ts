@@ -111,11 +111,17 @@ describe('config application service', () => {
 
   it('rejects config files with orphan workspace references', () => {
     const config = createValidConfig();
+    const favorite = config.favoriteStacks[0];
+
+    if (favorite === undefined) {
+      throw new Error('Expected a favorite fixture.');
+    }
+
     const invalidConfig = {
       ...config,
       favoriteStacks: [
         {
-          ...config.favoriteStacks[0],
+          ...favorite,
           workspaceName: 'unknown',
         },
       ],

@@ -20,8 +20,8 @@ type AppProps = {
 };
 
 type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'doctor' | 'commands';
-
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
+type Tone = 'ok' | 'warning' | 'danger';
 
 type LoadState = {
   loading: boolean;
@@ -53,6 +53,7 @@ type WorkspaceFormState = {
   name: string;
   path: string;
   busy: boolean;
+  editingName?: string;
   message?: string;
   error?: string;
 };
@@ -78,6 +79,7 @@ export function App({ token }: AppProps) {
   const [stackSearch, setStackSearch] = useState('');
   const [stackSort, setStackSort] = useState<StackSortMode>('name');
   const [workspaceForm, setWorkspaceForm] = useState<WorkspaceFormState>({ name: '', path: '', busy: false });
+  const [workspaceRemovalName, setWorkspaceRemovalName] = useState<string | undefined>();
   const [form, setForm] = useState<CommandFormState>({
     command: 'ps',
     serviceName: '',
@@ -134,9 +136,11 @@ export function App({ token }: AppProps) {
     }
   }
 
-  async function createWorkspaceFromUi() {
+  async function saveWorkspaceFromUi() {
     const name = workspaceForm.name.trim();
     const path = workspaceForm.path.trim();
+    const editingName = workspaceForm.editingName;
+    const alreadyExists = state.workspaces?.workspaces.some((workspace) => workspace.name === name) ?? false;
 
     if (name.length === 0 || path.length === 0) {
       setWorkspaceForm((current) => ({ ...current, error: 'Workspace name and path are required.', message: undefined }));
@@ -145,9 +149,25 @@ export function App({ token }: AppProps) {
 
     await runWorkspaceMutation(
       () => apiPost<WorkspaceListResult>(token, '/api/workspaces', { name, path }),
-      `Workspace ${name} was saved.`,
+      editingName === undefined && !alreadyExists ? `Workspace ${name} was created.` : `Workspace ${name} was updated.`,
       true,
     );
+  }
+
+  function editWorkspaceFromUi(workspace: WorkspaceDefinition) {
+    setWorkspaceRemovalName(undefined);
+    setWorkspaceForm({
+      name: workspace.name,
+      path: workspace.path,
+      busy: false,
+      editingName: workspace.name,
+      message: undefined,
+      error: undefined,
+    });
+  }
+
+  function cancelWorkspaceEdit() {
+    setWorkspaceForm({ name: '', path: '', busy: false });
   }
 
   async function useWorkspaceFromUi(name: string) {
@@ -159,6 +179,7 @@ export function App({ token }: AppProps) {
   }
 
   async function removeWorkspaceFromUi(name: string) {
+    setWorkspaceRemovalName(undefined);
     await runWorkspaceMutation(
       () => apiDelete<WorkspaceListResult>(token, `/api/workspaces/${encodeURIComponent(name)}`),
       `Workspace ${name} was removed.`,
@@ -169,7 +190,7 @@ export function App({ token }: AppProps) {
   async function runWorkspaceMutation(
     mutation: () => Promise<WorkspaceListResult>,
     successMessage: string,
-    clearCreateForm: boolean,
+    clearForm: boolean,
   ) {
     setWorkspaceForm((current) => ({ ...current, busy: true, error: undefined, message: undefined }));
 
@@ -177,11 +198,13 @@ export function App({ token }: AppProps) {
       const workspaces = await mutation();
       setState((current) => ({ ...current, workspaces }));
       setWorkspaceForm((current) => ({
-        name: clearCreateForm ? '' : current.name,
-        path: clearCreateForm ? '' : current.path,
+        name: clearForm ? '' : current.name,
+        path: clearForm ? '' : current.path,
         busy: false,
+        ...(clearForm || current.editingName === undefined ? {} : { editingName: current.editingName }),
         message: successMessage,
       }));
+      setWorkspaceRemovalName(undefined);
       setSelectedId(undefined);
       clearCommandFeedback(setForm);
       await load();
@@ -284,8 +307,13 @@ export function App({ token }: AppProps) {
             workspaces={state.workspaces}
             form={workspaceForm}
             setForm={setWorkspaceForm}
-            onCreate={() => void createWorkspaceFromUi()}
+            workspaceRemovalName={workspaceRemovalName}
+            onSave={() => void saveWorkspaceFromUi()}
             onUse={(name) => void useWorkspaceFromUi(name)}
+            onEdit={editWorkspaceFromUi}
+            onCancelEdit={cancelWorkspaceEdit}
+            onAskRemove={(name) => setWorkspaceRemovalName(name)}
+            onCancelRemove={() => setWorkspaceRemovalName(undefined)}
             onRemove={(name) => void removeWorkspaceFromUi(name)}
             onOpenStacks={() => setActiveView('stacks')}
           />
@@ -470,21 +498,32 @@ function WorkspacesView({
   workspaces,
   form,
   setForm,
-  onCreate,
+  workspaceRemovalName,
+  onSave,
   onUse,
+  onEdit,
+  onCancelEdit,
+  onAskRemove,
+  onCancelRemove,
   onRemove,
   onOpenStacks,
 }: {
   workspaces?: WorkspaceListResult;
   form: WorkspaceFormState;
   setForm: React.Dispatch<React.SetStateAction<WorkspaceFormState>>;
-  onCreate: () => void;
+  workspaceRemovalName?: string;
+  onSave: () => void;
   onUse: (name: string) => void;
+  onEdit: (workspace: WorkspaceDefinition) => void;
+  onCancelEdit: () => void;
+  onAskRemove: (name: string) => void;
+  onCancelRemove: () => void;
   onRemove: (name: string) => void;
   onOpenStacks: () => void;
 }) {
   const entries = workspaces?.workspaces ?? [];
   const currentWorkspaceName = workspaces?.currentWorkspaceName;
+  const editing = form.editingName !== undefined;
 
   return (
     <div className="view-stack">
@@ -492,20 +531,24 @@ function WorkspacesView({
         <div>
           <p className="eyebrow">Workspace management</p>
           <h2>Configure source roots from the browser.</h2>
-          <p className="muted">Add, select and remove local workspaces without returning to the terminal.</p>
+          <p className="muted">Create, edit, select and remove local workspaces without returning to the terminal.</p>
         </div>
         <button className="secondary" type="button" onClick={onOpenStacks}>Open stacks</button>
       </section>
 
       <section className="grid two-columns workspace-management-grid">
-        <Panel title="Create workspace" subtitle="Saved in the local user config">
-          <div className="workspace-form">
+        <Panel title={editing ? `Edit ${form.editingName}` : 'Add workspace'} subtitle="Stored in the local user config">
+          <div className="workspace-form polished-workspace-form">
+            <div className="workspace-form-header">
+              <StatusPill tone={editing ? 'warning' : 'ok'}>{editing ? 'Editing existing workspace' : 'New workspace'}</StatusPill>
+              <small>{editing ? 'Update the source path, then save.' : 'Choose a short name and a local source root.'}</small>
+            </div>
             <label>
               Name
               <input
                 placeholder="dev"
                 value={form.name}
-                disabled={form.busy}
+                disabled={form.busy || editing}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value, error: undefined, message: undefined }))}
               />
             </label>
@@ -518,8 +561,10 @@ function WorkspacesView({
                 onChange={(event) => setForm((current) => ({ ...current, path: event.target.value, error: undefined, message: undefined }))}
               />
             </label>
-            <div className="actions">
-              <button type="button" onClick={onCreate} disabled={form.busy}>{form.busy ? 'Saving...' : 'Save workspace'}</button>
+            <p className="workspace-form-hint">Saving an existing workspace name updates its path. Remove stays behind a confirmation step.</p>
+            <div className="actions workspace-form-actions">
+              <button type="button" onClick={onSave} disabled={form.busy}>{form.busy ? 'Saving...' : editing ? 'Update workspace' : 'Create workspace'}</button>
+              {editing ? <button className="secondary" type="button" onClick={onCancelEdit} disabled={form.busy}>Cancel edit</button> : null}
             </div>
             {form.error === undefined ? null : <Banner tone="danger">{form.error}</Banner>}
             {form.message === undefined ? null : <Banner tone="info">{form.message}</Banner>}
@@ -527,7 +572,7 @@ function WorkspacesView({
         </Panel>
 
         <Panel title="Saved workspaces" subtitle={currentWorkspaceName === undefined ? 'No current workspace' : `Current: ${currentWorkspaceName}`}>
-          <div className="workspace-list">
+          <div className="workspace-list polished-workspace-list">
             {entries.length === 0 ? (
               <EmptyState title="No workspace saved yet" detail="Create a workspace to make scan and stack operations start from a known root." />
             ) : (
@@ -537,7 +582,11 @@ function WorkspacesView({
                   workspace={workspace}
                   current={workspace.name === currentWorkspaceName}
                   busy={form.busy}
+                  removalRequested={workspaceRemovalName === workspace.name}
                   onUse={() => onUse(workspace.name)}
+                  onEdit={() => onEdit(workspace)}
+                  onAskRemove={() => onAskRemove(workspace.name)}
+                  onCancelRemove={onCancelRemove}
                   onRemove={() => onRemove(workspace.name)}
                 />
               ))
@@ -553,27 +602,45 @@ function WorkspaceCard({
   workspace,
   current,
   busy,
+  removalRequested,
   onUse,
+  onEdit,
+  onAskRemove,
+  onCancelRemove,
   onRemove,
 }: {
   workspace: WorkspaceDefinition;
   current: boolean;
   busy: boolean;
+  removalRequested: boolean;
   onUse: () => void;
+  onEdit: () => void;
+  onAskRemove: () => void;
+  onCancelRemove: () => void;
   onRemove: () => void;
 }) {
   return (
-    <article className={current ? 'workspace-card current' : 'workspace-card'}>
-      <div>
+    <article className={current ? 'workspace-card current polished-workspace-card' : 'workspace-card polished-workspace-card'}>
+      <div className="workspace-card-main">
         <div className="workspace-title-row">
           <strong>{workspace.name}</strong>
           {current ? <StatusPill tone="ok">Current</StatusPill> : <StatusPill tone="warning">Saved</StatusPill>}
         </div>
-        <span className="path-text">{workspace.path}</span>
+        <PathDisplay path={workspace.path} />
+        <small>Updated {formatOptionalDate(workspace.updatedAt)}</small>
       </div>
       <div className="workspace-card-actions">
-        <button className="secondary" type="button" onClick={onUse} disabled={busy || current}>Use</button>
-        <button className="danger" type="button" onClick={onRemove} disabled={busy}>Remove</button>
+        {current ? <span className="current-label">Active workspace</span> : <button className="secondary" type="button" onClick={onUse} disabled={busy}>Use</button>}
+        <button className="secondary" type="button" onClick={onEdit} disabled={busy}>Edit</button>
+        {removalRequested ? (
+          <div className="workspace-remove-confirmation">
+            <span>Remove this workspace?</span>
+            <button className="danger compact-button" type="button" onClick={onRemove} disabled={busy}>Confirm</button>
+            <button className="ghost compact-button" type="button" onClick={onCancelRemove} disabled={busy}>Cancel</button>
+          </div>
+        ) : (
+          <button className="ghost danger-link" type="button" onClick={onAskRemove} disabled={busy}>Remove</button>
+        )}
       </div>
     </article>
   );
@@ -841,18 +908,18 @@ function WorkspacePanel({ workspaces, health, onManage }: { workspaces?: Workspa
       )}
       <div className="list">
         {entries.length === 0 ? (
-          <EmptyState title="No workspace saved yet" detail="Create a workspace from the UI to make scans start from your usual source root." />
+          <EmptyState title="No workspace saved yet" detail="Create a workspace from the UI to make compose open directly on your usual source root." />
         ) : (
-          entries.slice(0, 4).map((workspace) => (
+          entries.map((workspace) => (
             <article key={workspace.name} className="list-item">
               <strong>{workspace.name}</strong>
-              <span>{workspace.path}</span>
+              <PathDisplay path={workspace.path} />
             </article>
           ))
         )}
       </div>
       <div className="actions compact-actions">
-        <button type="button" onClick={onManage}>Manage workspaces</button>
+        <button className="secondary" type="button" onClick={onManage}>Manage workspaces</button>
         {health === undefined ? null : <small className="muted">Server: {health.host}</small>}
       </div>
     </div>
@@ -1006,7 +1073,6 @@ function SkeletonGrid() {
       <div className="skeleton-card" />
       <div className="skeleton-card" />
       <div className="skeleton-card" />
-      <div className="skeleton-card" />
     </section>
   );
 }
@@ -1015,7 +1081,7 @@ function Banner({ tone, children }: { tone: 'info' | 'warning' | 'danger'; child
   return <div className={`banner ${tone}`}>{children}</div>;
 }
 
-function StatusPill({ tone, children }: { tone: 'ok' | 'warning' | 'danger'; children: React.ReactNode }) {
+function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
 
@@ -1026,6 +1092,10 @@ function CodeBlock({ title, content }: { title: string; content: string }) {
       <pre>{content}</pre>
     </div>
   );
+}
+
+function PathDisplay({ path }: { path: string }) {
+  return <code className="path-code" title={path}>{path}</code>;
 }
 
 function createRequest(project: DiscoveredComposeProject | undefined, form: CommandFormState): CommandRequest | undefined {
@@ -1115,7 +1185,7 @@ function clearCommandFeedback(setForm: React.Dispatch<React.SetStateAction<Comma
   }));
 }
 
-function runtimeToneFromState(runtime: RuntimeState | undefined): 'ok' | 'warning' | 'danger' {
+function runtimeToneFromState(runtime: RuntimeState | undefined): Tone {
   if (runtime === undefined || runtime.loading) {
     return 'warning';
   }
@@ -1127,7 +1197,7 @@ function runtimeToneFromState(runtime: RuntimeState | undefined): 'ok' | 'warnin
   return toneForServiceState(runtime.status?.state);
 }
 
-function toneForServiceState(state: string | undefined): 'ok' | 'warning' | 'danger' {
+function toneForServiceState(state: string | undefined): Tone {
   if (state === undefined) {
     return 'warning';
   }
@@ -1152,4 +1222,18 @@ function formatExecution(execution: ComposeExecutionResult): string {
     execution.stdout === '' ? undefined : `stdout:\n${execution.stdout}`,
     execution.stderr === '' ? undefined : `stderr:\n${execution.stderr}`,
   ].filter((line): line is string => line !== undefined).join('\n\n');
+}
+
+function formatOptionalDate(value: string | undefined): string {
+  if (value === undefined) {
+    return 'recently';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'recently';
+  }
+
+  return date.toLocaleDateString();
 }

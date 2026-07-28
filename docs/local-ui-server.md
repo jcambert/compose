@@ -58,7 +58,7 @@ Main areas:
 - Dashboard overview with workspace, stack, service, doctor and runtime summary cards.
 - Sidebar navigation for Dashboard, Workspaces, Stacks, Doctor and Commands.
 - Top bar showing the current workspace, local server state and refresh action.
-- Workspace management with create, select-current and remove actions.
+- Workspace management with create, edit-path, select-current and confirmed remove actions.
 - Stack browser with client-side search and sorting.
 - Stack detail panel with services, runtime status, ports and container names when available.
 - Command workflow with a clear preview, confirmation and execution sequence.
@@ -85,7 +85,7 @@ POST   /api/commands/execute
 
 ## Workspace management
 
-The local UI can manage saved workspaces from the browser. The same local token protection applies to read and write endpoints.
+The local UI can manage saved workspaces from the browser. The same local token protection applies to read and write endpoints. The workspace panel keeps destructive remove actions behind an explicit confirmation and uses the same save endpoint to update an existing workspace path.
 
 Create or update a workspace:
 

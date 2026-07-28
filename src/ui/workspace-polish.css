@@ -1,0 +1,130 @@
+.workspace-management-grid {
+  grid-template-columns: minmax(18rem, .78fr) minmax(0, 1.22fr);
+  align-items: start;
+}
+
+.polished-workspace-form,
+.workspace-form-header,
+.polished-workspace-list {
+  display: grid;
+  gap: .85rem;
+}
+
+.workspace-form-header {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.workspace-form-hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
+.workspace-form-actions {
+  margin: .15rem 0 0;
+}
+
+.polished-workspace-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, rgba(15, 23, 42, .82), rgba(30, 41, 59, .48));
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .18);
+}
+
+.polished-workspace-card.current {
+  border-color: rgba(34, 197, 94, .42);
+  background: linear-gradient(145deg, rgba(20, 83, 45, .24), rgba(15, 23, 42, .82));
+}
+
+.workspace-card-main {
+  min-width: 0;
+}
+
+.workspace-card-main > small {
+  display: block;
+  margin-top: .5rem;
+}
+
+.workspace-title-row,
+.workspace-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .7rem;
+}
+
+.path-code {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: .55rem;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: .7rem;
+  padding: .5rem .65rem;
+  background: rgba(2, 6, 23, .42);
+  color: #bfdbfe;
+  font-size: .86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current-label {
+  color: #86efac;
+  font-size: .84rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+button.ghost {
+  background: transparent;
+  border-color: rgba(148, 163, 184, .24);
+  box-shadow: none;
+}
+
+button.danger-link {
+  color: #fecaca;
+}
+
+button.compact-button {
+  padding: .52rem .7rem;
+  border-radius: .7rem;
+  font-size: .84rem;
+}
+
+.workspace-remove-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+  border: 1px solid rgba(248, 113, 113, .3);
+  border-radius: .85rem;
+  padding: .35rem;
+  background: rgba(127, 29, 29, .18);
+}
+
+.workspace-remove-confirmation span {
+  color: #fecaca;
+  font-size: .84rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .workspace-management-grid,
+  .polished-workspace-card {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-card-actions,
+  .workspace-remove-confirmation {
+    justify-content: flex-start;
+  }
+}

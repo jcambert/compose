@@ -2,28 +2,23 @@
 
 `compose` is a professional Node.js CLI for discovering, browsing, validating and executing Docker Compose projects from a clean terminal workflow.
 
-The command is intentionally named `compose`, because the fact that it is a CLI is already implicit.
+The command is intentionally named `compose`, because the fact that it is a CLI is already implicit. The primary product remains the CLI. The browser UI is optional, local-only and launched by the CLI through `compose ui`.
 
 ## Goals
 
-- Discover every Docker Compose file recursively from a root directory.
+- Discover Docker Compose files recursively from a root directory.
 - Detect `docker-compose.yml`, `docker-compose.yaml`, `compose.yml` and `compose.yaml` at any depth.
 - Keep large workspace scans practical with default exclusions and traversal guard rails.
-- List discovered projects with absolute paths and service names.
-- Browse discovered stacks and services interactively.
-- Filter and sort terminal browser stack choices for large workspaces.
-- Display live stack and service runtime status in the browser.
 - Persist named workspaces, favorites and recent stacks for daily usage.
+- Browse discovered stacks and services interactively from the terminal.
+- Filter and sort stack choices for large workspaces.
 - Execute Docker Compose commands through a reliable command builder.
 - Guide humans through command options with `--guided`.
 - Diagnose local setup with `compose doctor`.
-- Start an optional local browser UI with `compose ui`.
-- Keep the codebase modular, testable and distributable through npm.
-- Keep command descriptors UI-neutral so the CLI and GUI reuse the same application services.
+- Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks and preview commands.
+- Keep command descriptors UI-neutral so CLI and GUI reuse the same application services.
 
 ## Installation
-
-The package is available for global npm installation:
 
 ```bash
 npm install -g @jc90100/compose
@@ -32,7 +27,7 @@ compose --help
 compose doctor
 ```
 
-During development, use the repository checkout:
+During development:
 
 ```bash
 npm ci
@@ -60,12 +55,11 @@ compose workspace add dev C:\Sources
 compose workspace use dev
 compose workspace current
 compose workspace list
-compose browse
-compose browse --filter api
-compose browse --sort runtime
-compose browse C:\Sources --filter monitoring --sort path
+compose workspace remove dev
+
 compose favorites add infra
 compose favorites list
+compose favorites remove infra
 
 compose config path
 compose config export --output compose-config.backup.json
@@ -76,8 +70,11 @@ compose scan .
 compose scan C:\Sources --json
 compose scan C:\Sources --exclude artifacts tmp-generated
 compose scan C:\Sources --max-depth 6 --max-directories 100000 --max-entries 500000
-compose select .
-compose browse .
+
+compose browse
+compose browse --filter api
+compose browse --sort runtime
+compose browse C:\Sources --filter monitoring --sort path
 compose stacks C:\Sources --max-depth 6 --filter worker --sort services --dry-run
 
 compose ui
@@ -91,20 +88,14 @@ compose up --project ./infra --guided --yes --dry-run
 compose down --project ./infra --guided
 compose down --project ./infra --remove-orphans
 compose ps --project ./infra
-compose logs --project ./infra --guided
 compose logs --project ./infra --follow --tail 200
-compose build --project ./infra --guided
 compose build --project ./infra --no-cache
 compose pull --project ./infra
 compose restart --project ./infra api
 compose kill --project ./infra api --signal SIGTERM
 compose rm --project ./infra api --force --stop
 compose config --project ./infra --services
-compose cp --project ./infra api:/tmp/file.txt ./file.txt
-compose version --project ./infra --short
-compose exec --project ./infra --guided
 compose exec --project ./infra api sh
-compose run --project ./infra --guided
 compose run --project ./infra --rm worker npm run migrate
 
 compose project init ./my-stack --name my-stack
@@ -125,7 +116,7 @@ It verifies:
 - whether the npm global executable directory is present in `PATH`
 - Node.js `20.19.0+`
 - Docker CLI availability
-- `docker compose version`
+- Docker Compose availability
 - access to the local user config path
 - current workspace configuration
 
@@ -189,25 +180,10 @@ compose workspace list
 compose workspace current
 ```
 
-Favorite commands:
-
-```bash
-compose favorites add infra
-compose favorites remove infra
-compose favorites list
-```
-
 Favorites are scoped to the current workspace and are stored in the local user config file:
 
 - Windows: `%APPDATA%\compose\config.json`
 - Linux/macOS: `~/.config/compose/config.json`
-
-In the browser, favorites are displayed first and marked with a star:
-
-```text
-★ 1. infra           4 services · 3 running · 1 stopped · infra/compose.yaml
-◐ 2. monitoring      2 services · 1 running · 1 stopped · monitoring/compose.yml
-```
 
 ## Interactive stack browser
 
@@ -224,35 +200,7 @@ compose stacks . --dry-run
 
 The browser is menu-first and designed for day-to-day terminal usage. It reads live state with `docker compose ps --format json` and falls back cleanly when Docker is unavailable.
 
-```text
-╭─ Compose Browser ──────────────────────────────────────────────
-│ Root: C:\Sources
-│ Workspace: dev
-│ Stacks: 3
-│ Runtime: 1 running · 1 partial · 1 stopped · 0 unavailable
-│ Mode: execute commands
-│ Navigate with arrows, press Enter to select.
-╰──────────────────────────────────────────────────────────────────
-? Select a stack
-  ★ 1. infra           4 services · 4 running · 0 stopped · infra/compose.yaml
-  ◐ 2. monitoring      2 services · 1 running · 1 stopped · monitoring/compose.yml
-  ↻ Refresh            rafraîchir les statuts runtime
-  ✕ Quit               fermer le browser
-```
-
-Stack and service menus include runtime context before asking for an action. Actions are grouped as inspect, lifecycle, tools and danger-zone operations.
-
-The browser lets you:
-
-- inspect containers with `ps`, `top`, `images`, `config` and `version`
-- start, create, build, stop, restart, pause and unpause stacks or services
-- show stack or service logs with a safe default tail
-- run `port <service> <private-port>` through a prompt
-- run `cp <source> <target>` through a prompt
-- open a service shell with `exec <service> sh`
-- run destructive `down`, `kill` and `rm` only after explicit confirmation
-
-`--dry-run` prints the generated Docker command without executing it and does not call Docker for runtime status.
+Stack and service menus include runtime context before asking for an action. Actions are grouped as inspect, lifecycle, tools and danger-zone operations. Destructive `down`, `kill` and `rm` actions require explicit confirmation.
 
 ## Scanner performance
 
@@ -288,10 +236,14 @@ The local UI:
 - protects the browser session and API with a short-lived token
 - serves bundled React assets locally from `dist/ui`
 - shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews
+- manages saved workspaces from the browser: create, edit path, select current and remove with confirmation
+- keeps the current workspace visually distinct and hides destructive removal behind an explicit confirmation
 - requires explicit confirmation before command execution
 - requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`
 
 The browser UI is built by `npm run build` and packaged with the npm CLI. The browser no longer needs to download React from an external CDN at runtime. In a source checkout where the UI assets are missing, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.
+
+Workspace management in the UI uses the same local user config as the CLI. Saving an existing workspace name updates its path, switching workspace refreshes the stack scan, and removing a workspace requires a visible confirmation step.
 
 See [`docs/local-ui-server.md`](docs/local-ui-server.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
 
@@ -303,11 +255,6 @@ Use `--guided` when you want `compose` to ask useful questions before executing 
 compose up --project ./infra --guided
 compose rm --project ./infra --guided
 compose port --project ./infra --guided
-```
-
-Use `--guided --yes` to accept safe guided defaults without prompts, and combine with `--dry-run` to preview the final Docker command.
-
-```bash
 compose up --project ./infra --guided --yes --dry-run
 ```
 
@@ -321,7 +268,7 @@ compose up --project ./infra --guided --yes --dry-run
 - `@inquirer/prompts` for interactive flows
 - `yaml` for Compose YAML parsing and writing
 - Zod for internal validation
-- Execa for controlled `docker compose` execution
+- Execa for controlled Docker Compose execution
 - Vitest for unit and integration tests
 - GitHub Actions for CI/CD and release validation
 
@@ -375,15 +322,13 @@ Run validation locally:
 npm run validate
 ```
 
-Run the release-readiness checks directly:
+Run release-readiness checks directly:
 
 ```bash
 npm run build
 npm run smoke
 npm run pack:dry-run
 ```
-
-When intentionally changing dependencies, update `package.json`, regenerate `package-lock.json`, and commit both files together.
 
 For local CLI testing:
 
@@ -393,7 +338,6 @@ compose --help
 compose doctor
 compose workspace add dev C:\Sources
 compose config path
-compose config export
 compose browse --filter api --sort runtime --dry-run
 compose ui --skip-docker --no-open
 ```
@@ -409,6 +353,8 @@ See:
 - [`docs/compose-command-surface.md`](docs/compose-command-surface.md)
 - [`docs/config-management.md`](docs/config-management.md)
 - [`docs/local-ui-server.md`](docs/local-ui-server.md)
+- [`docs/gui-roadmap.md`](docs/gui-roadmap.md)
+- [`docs/backlog.md`](docs/backlog.md)
 - [`docs/browser-filtering-sorting.md`](docs/browser-filtering-sorting.md)
 - [`docs/scanner-performance.md`](docs/scanner-performance.md)
 - [`docs/release.md`](docs/release.md)

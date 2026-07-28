@@ -13,6 +13,7 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - Browse discovered stacks and services interactively from the terminal.
 - Filter and sort stack choices for large workspaces.
 - Execute Docker Compose commands through a reliable command builder.
+- Normalize common Docker Compose execution failures with actionable diagnostics.
 - Guide humans through command options with `--guided`.
 - Diagnose local setup with `compose doctor`.
 - Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks, stream runtime/logs and preview commands.
@@ -133,6 +134,8 @@ Standard mode returns a non-zero exit code for errors. Warnings, such as no curr
 
 On Windows, `compose doctor` helps diagnose the common case where `npm install -g @jc90100/compose` succeeded but PowerShell cannot find `compose` until the npm global prefix is added to `PATH` or the terminal is reopened.
 
+Docker Compose command failures are also normalized after execution. Failed results carry a diagnostic kind, generated command, working directory, Compose file path, exit code, hints and raw stdout/stderr. The first diagnostic kinds cover unavailable Docker, missing Compose files and generic non-zero Docker Compose failures.
+
 ## Configuration management
 
 `compose` stores workspaces, favorites and recent stacks in a local user config file.
@@ -221,6 +224,7 @@ The local UI:
 - keeps the current workspace visually distinct and hides destructive removal behind an explicit confirmation
 - requires explicit confirmation before command execution
 - requires stronger confirmation for destructive commands such as `down`, `kill` and `rm`
+- receives the same structured command diagnostics as the CLI when Docker Compose execution fails
 
 The browser UI is built by `npm run build` and packaged with the npm CLI. The browser no longer needs to download React from an external CDN at runtime. In a source checkout where the UI assets are missing, `compose ui` returns a visible fallback page explaining that `npm run build` must be run.
 
@@ -228,7 +232,7 @@ Workspace management in the UI uses the same local user config as the CLI. Savin
 
 Live streaming is read-only. It uses token-protected Server-Sent Events for selected stack runtime updates and `docker compose logs --follow` output.
 
-See [`docs/local-ui-server.md`](docs/local-ui-server.md), [`docs/gui-streaming.md`](docs/gui-streaming.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
+See [`docs/local-ui-server.md`](docs/local-ui-server.md), [`docs/gui-streaming.md`](docs/gui-streaming.md), [`docs/compose-error-reporting.md`](docs/compose-error-reporting.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
 
 ## Guided mode
 
@@ -274,6 +278,7 @@ docs/
   architecture.md
   cli-design.md
   compose-command-surface.md
+  compose-error-reporting.md
   config-management.md
   gui-roadmap.md
   gui-streaming.md
@@ -327,6 +332,7 @@ See:
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/cli-design.md`](docs/cli-design.md)
 - [`docs/compose-command-surface.md`](docs/compose-command-surface.md)
+- [`docs/compose-error-reporting.md`](docs/compose-error-reporting.md)
 - [`docs/config-management.md`](docs/config-management.md)
 - [`docs/local-ui-server.md`](docs/local-ui-server.md)
 - [`docs/gui-streaming.md`](docs/gui-streaming.md)

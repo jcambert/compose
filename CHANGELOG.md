@@ -16,8 +16,9 @@ The project follows a pragmatic semver policy:
 - Hardened `compose doctor` diagnostics for package version, executable discovery, npm global prefix, PATH integration, Node.js, Docker, Docker Compose, config access and current workspace.
 - Local configuration management commands: `compose config path`, `compose config export`, `compose config import` and `compose config reset`.
 - Optional local UI server launched with `compose ui`, bound to `127.0.0.1`, protected by a short-lived token and backed by the same application services as the CLI.
-- React-based local UI MVP for doctor diagnostics, workspaces, stacks, stack details, runtime summary, command preview and command execution result display.
+- React-based local UI for doctor diagnostics, workspaces, stacks, stack details, runtime summary, command preview and command execution result display.
 - Bundled local UI asset pipeline that builds React with Vite into `dist/ui` for npm packaging.
+- Professional local UI layout with sidebar navigation, dashboard summary cards, stack search/sort controls, richer stack detail and a clearer command workflow.
 - Terminal browser filtering and sorting through `compose browse --filter <text>` and `compose browse --sort name|path|services|runtime`.
 - Scanner exclusions, symbolic link skipping, traversal guard rails and `compose scan --exclude`, `--max-directories` and `--max-entries` options for large source folders.
 - Release readiness documentation for the `v0.2.0` publication process.
@@ -28,6 +29,7 @@ The project follows a pragmatic semver policy:
 - Scanner warnings can be surfaced without polluting `compose scan --json` stdout.
 - The local UI keeps command execution behind explicit preview and confirmation flows, with stronger confirmation for destructive commands.
 - `compose ui` now serves bundled `dist/ui/index.html` and `/assets/*` files instead of browser ESM imports from an external CDN.
+- `compose ui` is organized as a local admin console with Dashboard, Stacks, Doctor and Commands sections.
 - Product backlog and GUI roadmap now reflect the CLI-first direction and the delivered optional local UI milestones.
 
 ### Fixed
@@ -39,7 +41,7 @@ The project follows a pragmatic semver policy:
 
 ### Notes
 
-The local UI is still intentionally lightweight and CLI-first. It is now bundled with the npm package, while richer service details and log/runtime streaming remain follow-up GUI improvements.
+The local UI remains optional and CLI-first. It is now bundled with the npm package and has a more professional information architecture, while log/runtime streaming and richer command error reporting remain follow-up GUI improvements.
 
 ## 0.1.2 - CLI package metadata fix
 

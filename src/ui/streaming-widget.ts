@@ -1,0 +1,253 @@
+type StackListResult = {
+  stacks: Array<{
+    id: string;
+    name: string;
+    services: string[];
+  }>;
+};
+
+type RuntimeStatus = {
+  summary?: string;
+  state?: string;
+};
+
+type LogEvent = {
+  stream: 'stdout' | 'stderr';
+  content: string;
+};
+
+type WidgetState = {
+  stacks: StackListResult['stacks'];
+  selectedStackId: string;
+  selectedService: string;
+  runtimeSource?: EventSource;
+  logSource?: EventSource;
+  output: string[];
+  status: string;
+};
+
+export function mountStreamingWidget(token: string): void {
+  if (token.length === 0 || document.getElementById('compose-streaming-widget') !== null) {
+    return;
+  }
+
+  const root = document.createElement('section');
+  root.id = 'compose-streaming-widget';
+  root.className = 'streaming-widget collapsed';
+  document.body.append(root);
+
+  const state: WidgetState = {
+    stacks: [],
+    selectedStackId: '',
+    selectedService: '',
+    output: [],
+    status: 'Ready',
+  };
+
+  function closeRuntimeStream(): void {
+    state.runtimeSource?.close();
+    state.runtimeSource = undefined;
+  }
+
+  function closeLogStream(): void {
+    state.logSource?.close();
+    state.logSource = undefined;
+  }
+
+  function closeStreams(): void {
+    closeRuntimeStream();
+    closeLogStream();
+    state.status = 'Streams stopped';
+    render();
+  }
+
+  function append(line: string): void {
+    state.output = [...state.output, line].slice(-250);
+    render();
+  }
+
+  function selectedStack() {
+    return state.stacks.find((stack) => stack.id === state.selectedStackId);
+  }
+
+  async function loadStacks(): Promise<void> {
+    state.status = 'Loading stacks...';
+    render();
+
+    try {
+      const response = await fetch('/api/stacks', {
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json() as StackListResult;
+      state.stacks = result.stacks;
+      state.selectedStackId = state.selectedStackId === '' ? result.stacks[0]?.id ?? '' : state.selectedStackId;
+      state.status = result.stacks.length === 0 ? 'No stack available' : 'Ready';
+    } catch (error) {
+      state.status = error instanceof Error ? error.message : 'Unable to load stacks';
+    }
+
+    render();
+  }
+
+  function startRuntime(): void {
+    const stack = selectedStack();
+
+    if (stack === undefined) {
+      state.status = 'Select a stack first';
+      render();
+      return;
+    }
+
+    closeRuntimeStream();
+    const params = new URLSearchParams({ token, stackId: stack.id, intervalMs: '5000' });
+    const source = new EventSource(`/api/events/runtime?${params.toString()}`);
+    state.runtimeSource = source;
+    state.status = `Runtime stream: ${stack.name}`;
+    append(`[runtime] connecting to ${stack.name}`);
+
+    source.addEventListener('runtime', (event) => {
+      const payload = readSse<RuntimeStatus>(event);
+      append(`[runtime] ${payload?.summary ?? payload?.state ?? 'status updated'}`);
+    });
+    source.addEventListener('runtime-error', (event) => {
+      const payload = readSse<{ message?: string }>(event);
+      append(`[runtime:error] ${payload?.message ?? 'stream error'}`);
+    });
+    source.onerror = () => {
+      state.status = 'Runtime stream disconnected';
+      render();
+    };
+
+    render();
+  }
+
+  function startLogs(): void {
+    const stack = selectedStack();
+
+    if (stack === undefined) {
+      state.status = 'Select a stack first';
+      render();
+      return;
+    }
+
+    closeLogStream();
+    const params = new URLSearchParams({ token, stackId: stack.id, tail: '200' });
+
+    if (state.selectedService.length > 0) {
+      params.set('service', state.selectedService);
+    }
+
+    const source = new EventSource(`/api/logs/stream?${params.toString()}`);
+    state.logSource = source;
+    state.status = `Log stream: ${stack.name}`;
+    append(`[logs] connecting to ${stack.name}${state.selectedService.length === 0 ? '' : `/${state.selectedService}`}`);
+
+    source.addEventListener('log', (event) => {
+      const payload = readSse<LogEvent>(event);
+
+      if (payload === undefined) {
+        return;
+      }
+
+      for (const line of payload.content.split(/\r?\n/).filter((item) => item.trim().length > 0)) {
+        append(`[${payload.stream}] ${line}`);
+      }
+    });
+    source.addEventListener('logs-complete', () => {
+      append('[logs] stream completed');
+      closeLogStream();
+    });
+    source.addEventListener('logs-error', (event) => {
+      const payload = readSse<{ message?: string }>(event);
+      append(`[logs:error] ${payload?.message ?? 'stream error'}`);
+    });
+    source.onerror = () => {
+      state.status = 'Log stream disconnected';
+      render();
+    };
+
+    render();
+  }
+
+  function toggle(): void {
+    root.classList.toggle('collapsed');
+  }
+
+  function render(): void {
+    const stack = selectedStack();
+    const serviceOptions = stack?.services ?? [];
+
+    root.innerHTML = `
+      <button class="streaming-widget-toggle" type="button">Live streams</button>
+      <div class="streaming-widget-panel">
+        <div class="streaming-widget-header">
+          <strong>Live streams</strong>
+          <small>${escapeHtml(state.status)}</small>
+        </div>
+        <label>
+          Stack
+          <select data-role="stack">
+            ${state.stacks.length === 0 ? '<option value="">No stack</option>' : state.stacks.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === state.selectedStackId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>
+          Service logs
+          <select data-role="service">
+            <option value="">All services</option>
+            ${serviceOptions.map((service) => `<option value="${escapeHtml(service)}" ${service === state.selectedService ? 'selected' : ''}>${escapeHtml(service)}</option>`).join('')}
+          </select>
+        </label>
+        <div class="streaming-widget-actions">
+          <button type="button" data-action="reload">Reload stacks</button>
+          <button type="button" data-action="runtime">Runtime</button>
+          <button type="button" data-action="logs">Logs</button>
+          <button type="button" data-action="stop">Stop</button>
+        </div>
+        <pre class="streaming-widget-output">${escapeHtml(state.output.length === 0 ? 'No live event yet.' : state.output.join('\n'))}</pre>
+      </div>
+    `;
+
+    root.querySelector<HTMLButtonElement>('.streaming-widget-toggle')?.addEventListener('click', toggle);
+    root.querySelector<HTMLSelectElement>('[data-role="stack"]')?.addEventListener('change', (event) => {
+      state.selectedStackId = (event.currentTarget as HTMLSelectElement).value;
+      state.selectedService = '';
+      closeStreams();
+      render();
+    });
+    root.querySelector<HTMLSelectElement>('[data-role="service"]')?.addEventListener('change', (event) => {
+      state.selectedService = (event.currentTarget as HTMLSelectElement).value;
+      render();
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="reload"]')?.addEventListener('click', () => void loadStacks());
+    root.querySelector<HTMLButtonElement>('[data-action="runtime"]')?.addEventListener('click', startRuntime);
+    root.querySelector<HTMLButtonElement>('[data-action="logs"]')?.addEventListener('click', startLogs);
+    root.querySelector<HTMLButtonElement>('[data-action="stop"]')?.addEventListener('click', closeStreams);
+  }
+
+  window.addEventListener('beforeunload', closeStreams);
+  render();
+  void loadStacks();
+}
+
+function readSse<T>(event: Event): T | undefined {
+  try {
+    return JSON.parse((event as MessageEvent<string>).data) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}

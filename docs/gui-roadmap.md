@@ -186,9 +186,12 @@ Delivered behaviours:
 - Streams remain local-only, token-protected and read-only.
 - The browser can stop log streaming without killing the UI server.
 - The local UI exposes a compact live streams panel.
+- The Live streams panel can close from its header or with `Escape`.
+- The Live streams panel follows the stack selected in the Stacks view and clears stale stream output on stack changes.
+- Scrollable stack and live-output areas use themed scrollbars.
 - WebSocket support remains out of scope until a concrete bidirectional use case exists.
 
-Status: completed in PR #35.
+Status: runtime/log streaming completed in PR #34; Live streams UX polish completed in PR #35.
 
 ## Next delivery plan
 

@@ -1,5 +1,5 @@
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { scanComposeFiles } from '../../src/scanner/compose-file-scanner.js';
@@ -58,7 +58,7 @@ describe('compose file scanner', () => {
 
     const projects = await scanComposeFiles(root, { maxDepth: 0 });
 
-    expect(projects.map((project) => project.name)).toEqual([root.split(/[\\/]/).at(-1)]);
+    expect(projects.map((project) => project.name)).toEqual([basename(root)]);
   });
 
   it('fails fast when the directory visit limit is exceeded', async () => {

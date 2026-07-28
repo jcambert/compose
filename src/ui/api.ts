@@ -53,11 +53,25 @@ export type BuiltComposeCommand = {
   displayCommand: string;
 };
 
+export type ComposeExecutionDiagnostic = {
+  kind: 'docker-unavailable' | 'compose-file-missing' | 'compose-command-failed';
+  title: string;
+  message: string;
+  command: string;
+  workingDirectory: string;
+  composeFilePath: string;
+  exitCode: number;
+  hints: string[];
+  stdout: string;
+  stderr: string;
+};
+
 export type ComposeExecutionResult = {
   command: string;
   exitCode: number;
   stdout: string;
   stderr: string;
+  diagnostic?: ComposeExecutionDiagnostic;
 };
 
 export type CommandRequest = {

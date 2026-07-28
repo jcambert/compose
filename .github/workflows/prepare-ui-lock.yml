@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - build/bundle-local-gui-assets
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write

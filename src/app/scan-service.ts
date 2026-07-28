@@ -2,6 +2,8 @@ import { scanComposeFiles } from '../scanner/compose-file-scanner.js';
 import type { ScanComposeFilesOptions, ScanWarning } from '../scanner/compose-file-scanner.js';
 import type { DiscoveredComposeProject } from '../scanner/discovered-project.js';
 
+export type { ScanWarning } from '../scanner/compose-file-scanner.js';
+
 export type ScanComposeProjectsInput = {
   root?: string;
   maxDepth?: number;

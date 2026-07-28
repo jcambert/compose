@@ -41,6 +41,7 @@ export type StackRuntimeStatus = {
     state: string;
     containerCount: number;
     ports?: string[];
+    containerNames?: string[];
   }>;
 };
 

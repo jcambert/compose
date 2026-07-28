@@ -34,9 +34,16 @@ API clients can also send the token with:
 Authorization: Bearer <token>
 ```
 
-## React MVP
+## Bundled React UI
 
-The root page serves a React-based MVP shell that consumes the local JSON API.
+The root page serves a React-based UI shell from bundled local assets under `dist/ui`.
+
+Build output:
+
+```text
+dist/ui/index.html
+dist/ui/assets/*
+```
 
 Initial UI sections:
 
@@ -50,15 +57,9 @@ Initial UI sections:
 
 The UI does not duplicate Docker Compose command generation. It posts command requests to the local API, then displays the generated `docker compose` command before execution.
 
-The MVP keeps the implementation intentionally light and dependency-free for the npm package. It uses browser ESM imports for React while the backend, safety model and API contract are stabilized. A later packaging step can replace this with a bundled offline asset pipeline without changing the API contract.
+The browser no longer downloads React from an external ESM/CDN source at runtime. `compose ui` serves the bundled `index.html` and `/assets/*` files from the npm package or from a local source build.
 
-The root page includes a visible fallback inside `#root` before React mounts. This avoids a fully blank page when browser JavaScript fails before the React app starts.
-
-## Known MVP limitation
-
-The current React MVP still depends on browser access to the React ESM imports used by the generated page. This means `compose ui` can still fail to render the React app in browsers that cannot reach or trust that external source.
-
-This is an accepted MVP limitation only while the API and UX contract are being stabilized. The follow-up asset pipeline must remove this runtime browser dependency by serving local bundled assets from the npm package.
+The root page includes a visible fallback inside `#root` before React mounts. If bundled assets are missing from a source checkout, the server returns a visible fallback page explaining that `npm run build` must be run.
 
 ## Endpoints
 
@@ -167,4 +168,4 @@ Current constraints:
 
 ## Next step
 
-The next GUI hardening step is to bundle local UI assets so `compose ui` can render without downloading browser dependencies. Filtering, richer service details and streaming logs/runtime updates can follow without changing the local API safety model.
+The next GUI hardening step is streaming logs/runtime updates through Server-Sent Events. Filtering and richer service details can follow without changing the local API safety model.

@@ -65,6 +65,7 @@ The following capabilities are already implemented or release-hardened:
 - Workspace management from the UI.
 - Polished workspace management UI.
 - Read-only GUI streaming for runtime updates and logs.
+- Live streams panel UX fixes for close, selected stack synchronization and themed scrollbars.
 
 ## Priority backlog
 
@@ -130,14 +131,20 @@ Delivered behaviours:
 - Runtime stream updates selected stack state without manual refresh.
 - Streaming stays local-only, token-protected and read-only.
 - Log streams stop when the browser closes the stream or the user presses Stop.
+- The live streams panel can be closed explicitly and with `Escape`.
+- The live streams panel follows the stack selected in the Stacks view.
+- Changing the selected stack clears stale stream output and stops previous streams.
+- Scrollable stack and live-output panels use themed scrollbars.
 
 Acceptance criteria:
 
 - Logs can be streamed without refreshing the page.
 - Runtime status can update in the GUI.
 - The implementation remains local-only and token-protected.
+- The live streams panel can be closed without leaving stale streams running.
+- The panel does not mix output from different selected stacks.
 
-Status: completed in PR #35.
+Status: runtime/log streaming completed in PR #34; UX polish completed in PR #35.
 
 ### P3 — Docker Compose error reporting
 
@@ -181,9 +188,8 @@ Acceptance criteria for future reconsideration:
 ## Recommended next PR order
 
 ```text
-#34 release: prepare v0.2.1
-#35 feat: add GUI logs and runtime streaming
 #36 feat: improve Docker Compose error reporting
+#37 release: prepare v0.2.1
 ```
 
 ## Definition of done

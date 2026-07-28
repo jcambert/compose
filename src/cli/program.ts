@@ -1,10 +1,16 @@
-import { select } from '@inquirer/prompts';
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { confirm, select } from '@inquirer/prompts';
 import { Command } from 'commander';
 import {
   addComposeProjectService,
   createComposeProjectApplication,
   executeComposeApplicationCommand,
+  exportConfig,
+  getConfigPath,
+  importConfigFile,
   removeComposeProjectService,
+  resetConfig,
   scanComposeProjects,
   updateComposeProjectService,
   validateComposeProject,
@@ -181,14 +187,16 @@ function registerComposeExecutionCommands(program: Command): void {
     .option('-v, --volumes', 'remove anonymous volumes attached to containers')
     .action(async (services: string[], options: ComposeCliOptions) => runSimpleComposeCommand('rm', services, options));
 
-  addComposeCommand(program, 'config')
-    .option('--quiet', 'only validate the configuration')
+  const configCommand = addComposeCommand(program, 'config')
+    .option('--quiet', 'only validate the Docker Compose configuration')
     .option('--no-interpolate', 'do not interpolate environment variables')
     .option('--services', 'print service names')
     .option('--volumes', 'print volume names')
     .option('--profiles', 'print profile names')
     .option('--format <format>', 'output format')
     .action(async (options: ComposeCliOptions) => runSimpleComposeCommand('config', [], createConfigComposeCliOptions(options)));
+
+  registerLocalConfigCommands(configCommand);
 
   addComposeCommand(program, 'cp')
     .argument('<source>', 'source path')
@@ -247,6 +255,85 @@ function registerComposeExecutionCommands(program: Command): void {
     .action(async (service: string | undefined, commandArgs: string[], options: ComposeCliOptions) =>
       runSimpleComposeCommand('run', service === undefined ? [] : [service], options, commandArgs),
     );
+}
+
+function registerLocalConfigCommands(configCommand: Command): void {
+  configCommand
+    .command('path')
+    .description('Print the local compose user config path.')
+    .option('--json', 'print the config path as JSON')
+    .action(async (options: ConfigPathCliOptions) => {
+      const result = getConfigPath();
+
+      if (options.json === true) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(result.path);
+    });
+
+  configCommand
+    .command('export')
+    .description('Export the local compose user config as JSON.')
+    .option('--output <file>', 'write exported JSON to a file instead of stdout')
+    .action(async (options: ConfigExportCliOptions) => {
+      const result = await exportConfig();
+
+      if (options.output !== undefined) {
+        const outputPath = resolve(options.output);
+        await writeFile(outputPath, result.content, 'utf-8');
+        console.log(`Config exported to ${outputPath}`);
+        return;
+      }
+
+      console.log(result.content.trimEnd());
+    });
+
+  configCommand
+    .command('import')
+    .description('Import and validate a compose user config backup.')
+    .argument('<file>', 'JSON config file to import')
+    .option('--yes', 'overwrite the current config without asking for confirmation')
+    .action(async (filePath: string, options: ConfigImportCliOptions) => {
+      if (options.yes !== true) {
+        const shouldImport = await confirm({
+          message: 'Importing config will replace the current workspaces, favorites and recents. Continue?',
+          default: false,
+        });
+
+        if (!shouldImport) {
+          console.log('Config import cancelled.');
+          return;
+        }
+      }
+
+      const result = await importConfigFile({ filePath });
+      console.log(`Config imported from ${result.importedFrom}`);
+      console.log(`Target: ${result.path}`);
+      console.log(`Workspaces: ${result.workspaceCount}, favorites: ${result.favoriteCount}, recents: ${result.recentCount}`);
+    });
+
+  configCommand
+    .command('reset')
+    .description('Reset the local compose user config to an empty configuration.')
+    .option('--yes', 'reset the current config without asking for confirmation')
+    .action(async (options: ConfigResetCliOptions) => {
+      if (options.yes !== true) {
+        const shouldReset = await confirm({
+          message: 'Resetting config will remove all workspaces, favorites and recents. Continue?',
+          default: false,
+        });
+
+        if (!shouldReset) {
+          console.log('Config reset cancelled.');
+          return;
+        }
+      }
+
+      const result = await resetConfig();
+      console.log(`Config reset: ${result.path}`);
+    });
 }
 
 function registerProjectCommands(program: Command): void {
@@ -422,4 +509,20 @@ type ProjectServiceCliOptions = {
   env?: string[];
   dependsOn?: string[];
   overwrite?: boolean;
+};
+
+type ConfigPathCliOptions = {
+  json?: boolean;
+};
+
+type ConfigExportCliOptions = {
+  output?: string;
+};
+
+type ConfigImportCliOptions = {
+  yes?: boolean;
+};
+
+type ConfigResetCliOptions = {
+  yes?: boolean;
 };

@@ -81,7 +81,7 @@ The local UI remains optional and CLI-first. It is now bundled with the npm pack
 - Initial `compose` binary and npm package setup.
 - Recursive Compose file scanner.
 - Docker Compose command builder and executor.
-- Guided mode with UI-neutral command descriptors and option resolution.
+- Guided mode with UI-neutral command descriptors.
 - Project creation, service mutation and YAML validation.
 - Interactive stack browser with stack and service actions.
 - Live stack and service runtime status via `docker compose ps --format json`.

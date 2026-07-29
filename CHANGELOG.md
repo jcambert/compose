@@ -10,6 +10,21 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+## 0.2.2 - Local UI polish and agent guidelines
+
+### Added
+
+- Repository-level `AGENTS.md` contributor and agent guidelines covering project structure, validation, coding conventions, tests and pull request expectations.
+
+### Fixed
+
+- The Live streams launcher is now hidden while the Live streams panel is already open.
+- Local UI action groups now keep consistent top spacing across top bar, hero, status, detail and compact action sections.
+
+### Notes
+
+`0.2.2` is a patch release after `0.2.1`. It publishes the UI polish merged after the `0.2.1` npm release and does not change command syntax, the configuration model or the local UI security stance.
+
 ## 0.2.1 - Local UI workspace, streaming and diagnostics polish
 
 ### Added

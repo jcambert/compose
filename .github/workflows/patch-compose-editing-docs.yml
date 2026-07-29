@@ -1,0 +1,73 @@
+name: Patch Compose editing docs
+
+on:
+  push:
+    branches:
+      - docs/design-compose-yaml-editing
+
+permissions:
+  contents: write
+
+jobs:
+  patch-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: docs/design-compose-yaml-editing
+      - name: Patch roadmap docs
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          if '- Documented the simplified Compose YAML editing design' not in text:
+            text = text.replace(
+              '## Unreleased\n',
+              '## Unreleased\n\n### Added\n\n- Documented the simplified Compose YAML editing design, including guided service forms, targeted YAML mutations, diff preview, validation, safety rules and delivery slicing.\n'
+            )
+            changelog.write_text(text, encoding='utf-8')
+
+          backlog = Path('docs/backlog.md')
+          text = backlog.read_text(encoding='utf-8')
+          if '- Simplified Compose YAML editing design.' not in text:
+            text = text.replace(
+              '- `v0.2.2` patch release preparation metadata.\n',
+              '- `v0.2.2` patch release preparation metadata.\n- Simplified Compose YAML editing design.\n'
+            )
+          text = text.replace(
+            'Status: next product increment after `v0.2.2`.',
+            'Status: design completed in PR #40. Implementation starts in PR #41.'
+          )
+          text = text.replace(
+            '#40 docs: design simplified Compose YAML editing\n#41 feat: add Compose document editing service',
+            '#40 docs: design simplified Compose YAML editing (completed)\n#41 feat: add Compose document editing service'
+          )
+          backlog.write_text(text, encoding='utf-8')
+
+          roadmap = Path('docs/gui-roadmap.md')
+          text = roadmap.read_text(encoding='utf-8')
+          text = text.replace(
+            '## Next delivery plan\n\n### Step 14 — Design simplified Compose YAML editing',
+            '### Step 14 — Design simplified Compose YAML editing'
+          )
+          text = text.replace('Expected design outputs:', 'Delivered design outputs:')
+          if 'Status: completed in PR #40.' not in text:
+            text = text.replace(
+              '- Test plan for parser, mutation service, UI API and browser workflows.\n\n### Step 15 — Add Compose document editing service',
+              '- Test plan for parser, mutation service, UI API and browser workflows.\n\nStatus: completed in PR #40.\n\n## Next delivery plan\n\n### Step 15 — Add Compose document editing service'
+            )
+          roadmap.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patched docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet CHANGELOG.md docs/backlog.md docs/gui-roadmap.md; then
+            echo "No doc changes to commit."
+            exit 0
+          fi
+          git add CHANGELOG.md docs/backlog.md docs/gui-roadmap.md
+          git commit -m "docs: mark Compose YAML editing design complete"
+          git push origin HEAD:docs/design-compose-yaml-editing

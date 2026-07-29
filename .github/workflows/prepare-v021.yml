@@ -1,0 +1,36 @@
+name: Prepare v0.2.1
+
+on:
+  push:
+    branches:
+      - release/prepare-v021
+
+permissions:
+  contents: write
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: release/prepare-v021
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Bump package metadata
+        run: |
+          npm version 0.2.1 --no-git-tag-version
+      - name: Commit version sync
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet package.json package-lock.json; then
+            echo "Package metadata already synced."
+            exit 0
+          fi
+          git add package.json package-lock.json
+          git commit -m "release: bump package metadata to v0.2.1"
+          git push origin HEAD:release/prepare-v021

@@ -73,6 +73,7 @@ The following capabilities are already implemented or release-hardened:
 - `v0.2.1` release preparation metadata.
 - Repository `AGENTS.md` contributor and agent guidelines.
 - `v0.2.2` patch release preparation metadata.
+- Simplified Compose YAML editing design.
 
 ## Priority backlog
 
@@ -214,7 +215,7 @@ Acceptance criteria:
 - Existing unsupported keys are preserved unless the user explicitly removes them.
 - CLI workflows remain available and the GUI does not create a separate configuration model.
 
-Status: next product increment after `v0.2.2`.
+Status: design completed in PR #40. Implementation starts in PR #41.
 
 ### P4 — Templates, to revalidate later
 
@@ -238,7 +239,7 @@ Acceptance criteria for future reconsideration:
 
 ```text
 #39 release: prepare v0.2.2
-#40 docs: design simplified Compose YAML editing
+#40 docs: design simplified Compose YAML editing (completed)
 #41 feat: add Compose document editing service
 #42 feat: expose guided service editing in local UI
 #43 test: validate installed CLI and UI editing on Windows with real Docker stacks

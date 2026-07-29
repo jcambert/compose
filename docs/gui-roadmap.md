@@ -233,13 +233,11 @@ Delivered behaviours:
 
 Status: `v0.2.1` completed in PR #37; `v0.2.2` prepared in PR #39.
 
-## Next delivery plan
-
 ### Step 14 — Design simplified Compose YAML editing
 
 Define the architecture and user experience for editing Compose service definitions without requiring the user to know Docker Compose YAML details.
 
-Expected design outputs:
+Delivered design outputs:
 
 - App service contract for listing, creating, updating and deleting service definitions.
 - YAML mutation strategy that preserves unsupported advanced keys.
@@ -247,6 +245,10 @@ Expected design outputs:
 - Diff preview and validation flow before saving.
 - Safety rules for local-only, token-protected file writes.
 - Test plan for parser, mutation service, UI API and browser workflows.
+
+Status: completed in PR #40.
+
+## Next delivery plan
 
 ### Step 15 — Add Compose document editing service
 

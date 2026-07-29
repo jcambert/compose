@@ -10,6 +10,10 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+### Added
+
+- Documented the simplified Compose YAML editing design, including guided service forms, targeted YAML mutations, diff preview, validation, safety rules and delivery slicing.
+
 ## 0.2.2 - Local UI polish and agent guidelines
 
 ### Added

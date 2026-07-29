@@ -13,6 +13,8 @@ The project follows a pragmatic semver policy:
 ### Added
 
 - Documented the simplified Compose YAML editing design, including guided service forms, targeted YAML mutations, diff preview, validation, safety rules and delivery slicing.
+- Added a shared Compose editing application service for listing services, previewing create/update/delete mutations and committing validated changes with optimistic file-change protection.
+- Added a Compose service YAML mutation layer that preserves unsupported service keys and top-level Compose sections while exposing a guided editable service model.
 
 ## 0.2.2 - Local UI polish and agent guidelines
 

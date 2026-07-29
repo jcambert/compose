@@ -10,6 +10,8 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+## 0.2.1 - Local UI workspace, streaming and diagnostics polish
+
 ### Added
 
 - Local UI workspace management: create saved workspaces, update an existing workspace path, select the current workspace and remove saved workspaces from `compose ui`.
@@ -30,6 +32,10 @@ The project follows a pragmatic semver policy:
 
 - The Live streams panel can now be closed from its header or with Escape, and active streams are stopped before the panel collapses.
 - Terminal execution now prints actionable diagnostics for common Docker Compose command failures when using the default Docker runner.
+
+### Notes
+
+`0.2.1` is a post-`0.2.0` stabilization release. It does not change the CLI command syntax or the local UI security stance: `compose ui` remains optional, local-only and token-protected.
 
 ## 0.2.0 - Local UI, reusable services and large workspace hardening
 
@@ -91,7 +97,7 @@ The local UI remains optional and CLI-first. It is now bundled with the npm pack
 - Local workspaces, favorites and recent stack persistence.
 - Extended Docker Compose command surface for lifecycle, inspection, diagnostics, file copy and watch flows.
 - Full browser exposure for the extended command surface, including destructive confirmations and prompts for `kill`, `rm`, `port` and `cp`.
-- `compose doctor` diagnostics for Node.js, Docker, Docker Compose, config access and current workspace.
+- `compose doctor` diagnostics for Node.js, Docker, Docker Compose config access and current workspace.
 - CLI smoke tests and npm pack dry-run checks.
 - Release workflow prepared for validation and optional npm publication.
 

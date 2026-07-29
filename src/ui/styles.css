@@ -222,6 +222,7 @@ small {
   flex-wrap: wrap;
   align-items: center;
   gap: .75rem;
+  margin-top: 1rem;
 }
 
 .view-stack {

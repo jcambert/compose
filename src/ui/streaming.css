@@ -15,6 +15,10 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, .32);
 }
 
+.streaming-widget:not(.collapsed) .streaming-widget-toggle {
+  display: none;
+}
+
 .streaming-widget-panel {
   clear: both;
   display: grid;

@@ -2,7 +2,7 @@
 
 ## Product vision
 
-`compose` is a professional CLI for developers who already have Docker Compose projects and want to discover, inspect, operate and diagnose them from a clean terminal workflow.
+`compose` is a professional CLI for developers who already have Docker Compose projects and want to discover, inspect, operate, edit and diagnose them from a clean workflow.
 
 The primary product remains the CLI. The GUI is an optional local interface launched by the CLI, not a replacement product.
 
@@ -20,6 +20,8 @@ The primary product remains the CLI. The GUI is an optional local interface laun
 - Stable JSON outputs and reusable application services.
 - Optional local GUI launched by `compose ui`.
 - Local UI runtime and log streaming through Server-Sent Events.
+- Guided Compose file editing for users who are not Docker Compose YAML specialists.
+- Safe creation, update and deletion of service definitions inside Compose YAML files.
 
 ### Out of immediate scope
 
@@ -28,8 +30,9 @@ The primary product remains the CLI. The GUI is an optional local interface laun
 - Desktop packaging with Electron or Tauri.
 - Reimplementing Docker Compose behaviour.
 - A GUI-specific command model.
+- A raw YAML editor as the only Compose editing experience.
 
-Templates can be reconsidered later, but they are not part of the immediate roadmap because they shift the product from operating existing stacks to generating new stacks.
+Templates can be reconsidered later, but they are not part of the immediate roadmap because they shift the product from operating and editing existing stacks to generating new stack catalogs.
 
 ## Completed foundation
 
@@ -68,6 +71,8 @@ The following capabilities are already implemented or release-hardened:
 - Live streams panel UX fixes for close, selected stack synchronization and themed scrollbars.
 - Structured Docker Compose command failure diagnostics.
 - `v0.2.1` release preparation metadata.
+- Repository `AGENTS.md` contributor and agent guidelines.
+- `v0.2.2` patch release preparation metadata.
 
 ## Priority backlog
 
@@ -137,6 +142,7 @@ Delivered behaviours:
 - The live streams panel follows the stack selected in the Stacks view.
 - Changing the selected stack clears stale stream output and stops previous streams.
 - Scrollable stack and live-output panels use themed scrollbars.
+- The launcher is hidden while the Live streams panel is already open.
 
 Acceptance criteria:
 
@@ -146,7 +152,7 @@ Acceptance criteria:
 - The live streams panel can be closed without leaving stale streams running.
 - The panel does not mix output from different selected stacks.
 
-Status: runtime/log streaming completed in PR #34; UX polish completed in PR #35.
+Status: runtime/log streaming completed in PR #34; UX polish completed in PR #35 and PR #38.
 
 ### P3 — Docker Compose error reporting
 
@@ -173,11 +179,46 @@ Status: completed in PR #36.
 
 ### P3 — Release v0.2.1
 
-Status: release metadata prepared in PR #37. Publishing remains an explicit manual release workflow step after merge.
+Status: release metadata prepared in PR #37 and published manually afterwards.
 
-### P3 — Templates, to revalidate later
+### P3 — Release v0.2.2
 
-#### User story P3.3
+Status: release metadata prepared in PR #39. Publishing remains an explicit manual release workflow step after merge.
+
+### P4 — Simplified Compose YAML editing
+
+#### User story P4.1
+
+As a user who is not a Docker Compose YAML specialist, I can create, edit and delete service definitions from an existing stack through guided forms instead of editing raw YAML manually.
+
+Planned behaviours:
+
+- Read the selected stack's Compose YAML file through the existing Compose document layer.
+- Show services in an editable, user-friendly model.
+- Create a new service with guided fields for image/build, ports, environment, volumes, dependencies, restart policy and command.
+- Edit common service fields without requiring raw YAML knowledge.
+- Delete a service only after explicit confirmation.
+- Preview the YAML diff before writing changes.
+- Validate the resulting Compose document before saving.
+- Preserve unsupported or advanced YAML sections instead of silently dropping them.
+- Keep all file writes local-only and token-protected in `compose ui`.
+- Prefer safe, targeted document mutations over full file regeneration.
+
+Acceptance criteria:
+
+- A non-specialist can add a basic service from the UI.
+- A non-specialist can modify image, ports, environment and volumes for an existing service.
+- A non-specialist can delete a service with confirmation.
+- The tool shows what will change before writing the file.
+- Invalid Compose YAML is rejected with a clear diagnostic.
+- Existing unsupported keys are preserved unless the user explicitly removes them.
+- CLI workflows remain available and the GUI does not create a separate configuration model.
+
+Status: next product increment after `v0.2.2`.
+
+### P4 — Templates, to revalidate later
+
+#### User story P4.2
 
 As a developer, I might want to generate new Compose stacks from templates, but only if this does not compromise the product focus.
 
@@ -185,7 +226,7 @@ Current decision:
 
 - Do not prioritize templates now.
 - Avoid maintaining a large catalog of Docker images and stack variations.
-- Revisit only after CLI and optional GUI workflows are stable.
+- Revisit only after CLI, optional GUI and guided Compose editing workflows are stable.
 
 Acceptance criteria for future reconsideration:
 
@@ -196,8 +237,11 @@ Acceptance criteria for future reconsideration:
 ## Recommended next PR order
 
 ```text
-publish v0.2.1 through the release workflow
-then reassess the next product increment
+#39 release: prepare v0.2.2
+#40 docs: design simplified Compose YAML editing
+#41 feat: add Compose document editing service
+#42 feat: expose guided service editing in local UI
+#43 test: validate installed CLI and UI editing on Windows with real Docker stacks
 ```
 
 ## Definition of done

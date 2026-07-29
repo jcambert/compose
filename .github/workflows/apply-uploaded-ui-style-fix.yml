@@ -1,0 +1,69 @@
+name: Apply uploaded UI style fix
+
+on:
+  push:
+    branches:
+      - fix/apply-uploaded-ui-fixes
+
+permissions:
+  contents: write
+
+jobs:
+  patch-styles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/apply-uploaded-ui-fixes
+      - name: Apply uploaded styles.css fix
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('src/ui/styles.css')
+          text = path.read_text(encoding='utf-8')
+          old = '''.topbar-actions,
+          .hero-actions,
+          .actions,
+          .status-line,
+          .detail-actions,
+          .compact-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .75rem;
+          }
+          '''
+          new = '''.topbar-actions,
+          .hero-actions,
+          .actions,
+          .status-line,
+          .detail-actions,
+          .compact-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .75rem;
+            margin-top: 1rem;
+          }
+          '''
+
+          if new in text:
+            raise SystemExit(0)
+
+          if old not in text:
+            raise SystemExit('Target CSS block was not found.')
+
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet src/ui/styles.css; then
+            echo "No change to commit."
+            exit 0
+          fi
+          git add src/ui/styles.css
+          git commit -m "fix: align topbar action spacing"
+          git push origin HEAD:fix/apply-uploaded-ui-fixes

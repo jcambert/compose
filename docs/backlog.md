@@ -67,6 +67,7 @@ The following capabilities are already implemented or release-hardened:
 - Read-only GUI streaming for runtime updates and logs.
 - Live streams panel UX fixes for close, selected stack synchronization and themed scrollbars.
 - Structured Docker Compose command failure diagnostics.
+- `v0.2.1` release preparation metadata.
 
 ## Priority backlog
 
@@ -170,6 +171,10 @@ Acceptance criteria:
 
 Status: completed in PR #36.
 
+### P3 — Release v0.2.1
+
+Status: release metadata prepared in PR #37. Publishing remains an explicit manual release workflow step after merge.
+
 ### P3 — Templates, to revalidate later
 
 #### User story P3.3
@@ -191,7 +196,8 @@ Acceptance criteria for future reconsideration:
 ## Recommended next PR order
 
 ```text
-#37 release: prepare v0.2.1
+publish v0.2.1 through the release workflow
+then reassess the next product increment
 ```
 
 ## Definition of done

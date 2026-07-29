@@ -1,6 +1,6 @@
 {
   "name": "@jc90100/compose",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Professional Node.js CLI for discovering, managing and executing Docker Compose projects.",
   "type": "module",
   "repository": {

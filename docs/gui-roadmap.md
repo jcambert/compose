@@ -36,6 +36,7 @@ The first GUI iterations must not introduce:
 - A template catalog.
 - A second command model for the GUI.
 - Business rules that only exist in the UI layer.
+- Raw YAML editing as the only way to modify Compose services.
 
 Desktop packaging can be reconsidered after the local browser-based GUI proves useful.
 
@@ -49,6 +50,7 @@ The preferred implementation path is:
 - Local UI server: local Node HTTP server.
 - Streaming: Server-Sent Events first for logs and runtime status updates.
 - WebSocket: only later, if an interactive terminal-like experience is required.
+- Compose editing: YAML document parsing and targeted mutations through shared application services.
 
 The GUI is served by the CLI from `127.0.0.1` only. It chooses a free dynamic port by default and protects the session with a short-lived local token.
 
@@ -69,8 +71,12 @@ The GUI must reuse the same core primitives as the CLI:
 - Compose command execution.
 - Compose command failure diagnostics.
 - Read-only runtime and log streaming.
+- Compose YAML parsing and validation.
+- Guided service definition editing.
 
 The CLI and GUI must both resolve actions into the same typed command intent model before execution. The GUI must never parse terminal help output or rebuild Docker Compose commands independently.
+
+For Compose file editing, the GUI must not become a raw text editor first. It should expose guided forms for common service fields, show a preview of the YAML changes, validate before save and preserve unsupported advanced YAML sections.
 
 ## Current module direction
 
@@ -87,7 +93,16 @@ src/app/doctor-service.ts            expose diagnostics through the app boundary
 src/app/config-service.ts            expose config export/import/path/reset
 src/app/ui-server-service.ts         expose local GUI, JSON API and SSE streams
 src/compose/compose-error-reporting.ts normalize Docker Compose command failures
+src/yaml/                            parse and validate Compose documents
 src/ui/                              React UI source bundled into dist/ui
+```
+
+Planned app boundary for guided Compose editing:
+
+```text
+src/app/compose-editing-service.ts   list, create, update and delete Compose services safely
+src/yaml/compose-service-editor.ts   apply targeted service mutations while preserving YAML content
+src/ui/compose-editor*               guided browser forms for non-specialist users
 ```
 
 ## Delivered milestones
@@ -191,9 +206,10 @@ Delivered behaviours:
 - The Live streams panel can close from its header or with `Escape`.
 - The Live streams panel follows the stack selected in the Stacks view and clears stale stream output on stack changes.
 - Scrollable stack and live-output areas use themed scrollbars.
+- The Live streams launcher is hidden while the panel is already open.
 - WebSocket support remains out of scope until a concrete bidirectional use case exists.
 
-Status: runtime/log streaming completed in PR #34; Live streams UX polish completed in PR #35.
+Status: runtime/log streaming completed in PR #34; Live streams UX polish completed in PR #35 and PR #38.
 
 ### Step 12 — Improve Docker Compose error reporting
 
@@ -208,11 +224,55 @@ Delivered behaviours:
 
 Status: completed in PR #36.
 
+### Step 13 — Prepare v0.2.1 and v0.2.2 patch releases
+
+Delivered behaviours:
+
+- `v0.2.1` release metadata prepared after workspace UI management, GUI streaming, live streams UX fixes and structured command diagnostics.
+- `v0.2.2` release metadata prepared after the post-publication UI polish from PR #38.
+
+Status: `v0.2.1` completed in PR #37; `v0.2.2` prepared in PR #39.
+
 ## Next delivery plan
 
-### Step 13 — Prepare v0.2.1 release
+### Step 14 — Design simplified Compose YAML editing
 
-Prepare the next post-`v0.2.0` release with workspace UI management, GUI streaming, live streams UX fixes and structured command diagnostics.
+Define the architecture and user experience for editing Compose service definitions without requiring the user to know Docker Compose YAML details.
+
+Expected design outputs:
+
+- App service contract for listing, creating, updating and deleting service definitions.
+- YAML mutation strategy that preserves unsupported advanced keys.
+- Guided service form model for image/build, ports, environment, volumes, depends_on, command and restart policy.
+- Diff preview and validation flow before saving.
+- Safety rules for local-only, token-protected file writes.
+- Test plan for parser, mutation service, UI API and browser workflows.
+
+### Step 15 — Add Compose document editing service
+
+Implement the shared application service and YAML mutation layer.
+
+Expected behaviours:
+
+- Read the selected stack Compose file.
+- Return editable service summaries.
+- Create a basic service.
+- Update common service fields.
+- Delete a service with explicit confirmation data.
+- Validate before saving.
+- Preserve unsupported YAML sections.
+
+### Step 16 — Expose guided service editing in the local UI
+
+Add the browser experience for non-specialist users.
+
+Expected behaviours:
+
+- Open a Compose file/service from the selected stack.
+- Edit common service fields from guided forms.
+- Create and delete services with clear confirmations.
+- Show YAML diff preview before save.
+- Surface validation errors and diagnostics clearly.
 
 ## Security and safety requirements
 
@@ -226,6 +286,10 @@ The local GUI must follow these rules:
 - Require confirmations for destructive actions.
 - Support dry-run/preview flows wherever command execution is available.
 - Keep command diagnostics read-only and avoid hiding raw Docker Compose output.
+- Keep Compose file writes local-only and token-protected.
+- Preview YAML mutations before writing to disk.
+- Validate Compose documents before saving.
+- Preserve existing advanced YAML content unless explicitly changed.
 
 ## Decision rules for future GUI work
 
@@ -234,6 +298,7 @@ A GUI task is allowed when it improves one of these goals:
 - Makes existing CLI capabilities easier to inspect or operate.
 - Reuses application services without duplicating logic.
 - Improves visibility of Docker Compose command previews, runtime status, logs or diagnostics.
+- Simplifies Compose service editing for non-specialist users while preserving the real Compose file.
 - Keeps terminal workflows fully supported.
 
 A GUI task should be rejected or postponed when it requires:
@@ -242,3 +307,4 @@ A GUI task should be rejected or postponed when it requires:
 - A separate config format.
 - Desktop packaging before the local server proves valuable.
 - Remote server behaviour without an explicit security design.
+- Replacing Docker Compose semantics with an incompatible abstraction.

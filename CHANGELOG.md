@@ -1,3 +1,5 @@
+- Honor `compose ui --workspace <name>` by activating that workspace before the local UI server starts; without the option, the last active workspace remains in use.
+
 # Changelog
 
 All notable changes to this project are documented here.

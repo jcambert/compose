@@ -105,6 +105,7 @@ export async function apiDelete<T>(token: string, path: string): Promise<T> {
 
 async function api<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
+    cache: 'no-store',
     ...options,
     headers: {
       authorization: `Bearer ${token}`,

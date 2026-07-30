@@ -10,6 +10,7 @@ import type { BuiltComposeCommand } from '../../src/compose/compose-command.js';
 import type { StackRuntimeStatus } from '../../src/interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../../src/scanner/discovered-project.js';
 import type { WorkspaceDefinition } from '../../src/workspace/workspace-config.js';
+import type { ComposeServiceMutationPreview } from '../../src/yaml/compose-service-editor.js';
 
 const token = 'test-token';
 const project: DiscoveredComposeProject = {
@@ -73,6 +74,19 @@ function createDependencies(overrides: LocalUiServerDependencies = {}): LocalUiS
       cwd: '/workspace/infra',
       displayCommand: `docker compose ${input.command}`,
     }),
+    listComposeServices: async () => ({
+      composeFilePath: project.composeFilePath,
+      contentHash: 'hash-before',
+      services: [{
+        name: 'api', image: 'example/api:latest', ports: ['8080:8080'], environment: [], volumes: [], dependsOn: [], readOnlyKeys: [], preservedKeys: [],
+      }],
+    }),
+    previewCreateComposeService: async (input) => createServicePreview('create', input.service.name),
+    previewUpdateComposeService: async (input) => createServicePreview('update', input.serviceName),
+    previewDeleteComposeService: async (input) => createServicePreview('delete', input.serviceName),
+    commitComposeServiceMutation: async (input) => ({
+      composeFilePath: input.preview.composeFilePath, operation: input.preview.operation, serviceName: input.preview.serviceName, contentHash: 'hash-after',
+    }),
     executeCommand: async (input: ComposeApplicationCommandInput): Promise<ComposeApplicationCommandResult> => ({
       command: `docker compose ${input.command}`,
       exitCode: 0,
@@ -89,6 +103,14 @@ function createDependencies(overrides: LocalUiServerDependencies = {}): LocalUiS
       dryRun: input.options.dryRun === true,
     }),
     ...overrides,
+  };
+}
+
+function createServicePreview(operation: ComposeServiceMutationPreview['operation'], serviceName: string): ComposeServiceMutationPreview {
+  return {
+    operation, composeFilePath: project.composeFilePath, serviceName, originalContentHash: 'hash-before',
+    diff: `--- before\n+++ after\n+${serviceName}`, nextContent: `services:\n  ${serviceName}: {}`,
+    validation: { success: true, errors: [] }, warnings: [],
   };
 }
 
@@ -223,6 +245,25 @@ describe('local UI server application service', () => {
         available: true,
         state: 'running',
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('lists, previews and commits guided Compose service mutations', async () => {
+    const server = await startTestServer();
+
+    try {
+      const listed = await getJson(server, `/api/stacks/${encodeURIComponent(project.id)}/services`);
+      const preview = await postJson(server, `/api/stacks/${encodeURIComponent(project.id)}/services/preview`, {
+        operation: 'create', service: { name: 'worker', image: 'example/worker:latest' },
+      });
+      const committed = await postJson(server, `/api/stacks/${encodeURIComponent(project.id)}/services/commit`, { preview });
+
+      expect(listed).toMatchObject({ composeFilePath: project.composeFilePath, contentHash: 'hash-before' });
+      expect((listed.services as Array<{ name: string }>)[0]?.name).toBe('api');
+      expect(preview).toMatchObject({ operation: 'create', serviceName: 'worker' });
+      expect(committed).toMatchObject({ operation: 'create', serviceName: 'worker', contentHash: 'hash-after' });
     } finally {
       await server.close();
     }

@@ -130,3 +130,9 @@ The local UI remains optional and CLI-first. It is now bundled with the npm pack
 ### Notes
 
 `0.1.0` is the first release-ready baseline. npm publication remains an explicit manual decision.
+
+### Added
+
+- Add token-protected local UI endpoints for listing, previewing and committing guided Compose service mutations.
+- Add a browser service editor for create, update and delete operations with YAML diff review before saving.
+- Preserve unsupported service keys and reject commits when the Compose file changed after preview.

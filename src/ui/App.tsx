@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { ServicesView } from './ServicesView';
 import {
   apiDelete,
   apiGet,
@@ -19,7 +20,7 @@ type AppProps = {
   token: string;
 };
 
-type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'doctor' | 'commands';
+type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'services' | 'doctor' | 'commands';
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
 type Tone = 'ok' | 'warning' | 'danger';
 
@@ -340,6 +341,15 @@ export function App({ token }: AppProps) {
           />
         ) : null}
 
+        {activeView === 'services' ? (
+          <ServicesView
+            token={token}
+            project={selectedProject}
+            onChooseStack={() => setActiveView('stacks')}
+            onCommitted={load}
+          />
+        ) : null}
+
         {activeView === 'doctor' ? <DoctorView report={state.doctor} loading={state.loading} /> : null}
 
         {activeView === 'commands' ? (
@@ -381,6 +391,7 @@ function Sidebar({
         <NavButton active={activeView === 'dashboard'} label="Dashboard" description="Overview" onClick={() => setActiveView('dashboard')} />
         <NavButton active={activeView === 'workspaces'} label="Workspaces" description={`${summary.workspaceCount} saved`} onClick={() => setActiveView('workspaces')} />
         <NavButton active={activeView === 'stacks'} label="Stacks" description={`${summary.stackCount} projects`} onClick={() => setActiveView('stacks')} />
+        <NavButton active={activeView === 'services'} label="Services" description="Guided YAML editor" onClick={() => setActiveView('services')} />
         <NavButton active={activeView === 'doctor'} label="Doctor" description={summary.doctorIssues === 0 ? 'Healthy' : `${summary.doctorIssues} issues`} onClick={() => setActiveView('doctor')} />
         <NavButton active={activeView === 'commands'} label="Commands" description="Preview first" onClick={() => setActiveView('commands')} />
       </nav>

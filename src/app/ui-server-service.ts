@@ -14,6 +14,20 @@ import type { StackRuntimeStatus } from '../interactive/stack-runtime-status.js'
 import { readStackRuntimeStatus } from '../interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../scanner/discovered-project.js';
 import { executeComposeApplicationCommand, previewComposeApplicationCommand } from './compose-command-service.js';
+import {
+  commitComposeServiceMutation,
+  listComposeServices,
+  previewCreateComposeService,
+  previewDeleteComposeService,
+  previewUpdateComposeService,
+  type CommitComposeServiceMutationInput,
+  type ComposeServiceListResult,
+  type ComposeServiceMutationCommitResult,
+  type PreviewCreateComposeServiceInput,
+  type PreviewDeleteComposeServiceInput,
+  type PreviewUpdateComposeServiceInput,
+} from './compose-editing-service.js';
+import type { ComposeServiceMutationPreview } from '../yaml/compose-service-editor.js';
 import type {
   ComposeApplicationCommandInput,
   ComposeApplicationCommandOptions,
@@ -78,6 +92,11 @@ export type LocalUiServerDependencies = {
   streamLogs?: (input: LocalUiLogStreamInput) => AsyncIterable<LocalUiLogStreamEvent>;
   previewCommand?: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
   executeCommand?: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
+  listComposeServices?: (input: { composeFilePath: string }) => Promise<ComposeServiceListResult>;
+  previewCreateComposeService?: (input: PreviewCreateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  previewUpdateComposeService?: (input: PreviewUpdateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  previewDeleteComposeService?: (input: PreviewDeleteComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  commitComposeServiceMutation?: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;
 };
 
 type RuntimeDependencies = {
@@ -92,6 +111,11 @@ type RuntimeDependencies = {
   streamLogs: (input: LocalUiLogStreamInput) => AsyncIterable<LocalUiLogStreamEvent>;
   previewCommand: (input: ComposeApplicationCommandInput) => Promise<BuiltComposeCommand>;
   executeCommand: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;
+  listComposeServices: (input: { composeFilePath: string }) => Promise<ComposeServiceListResult>;
+  previewCreateComposeService: (input: PreviewCreateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  previewUpdateComposeService: (input: PreviewUpdateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  previewDeleteComposeService: (input: PreviewDeleteComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
+  commitComposeServiceMutation: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;
 };
 
 type RequestContext = {
@@ -301,6 +325,41 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
 
+    const serviceEditingMatch = matchStackServicesPath(url.pathname);
+
+    if (serviceEditingMatch !== undefined) {
+      const scanContext = await resolveStackScanContext(url, context);
+      const stacks = await scanProjects(scanContext, context.dependencies);
+      const project = findProject(stacks, serviceEditingMatch.stackId);
+
+      if (project === undefined) {
+        sendError(response, 404, 'stack-not-found', `Stack not found: ${serviceEditingMatch.stackId}`);
+        return;
+      }
+
+      if (request.method === 'GET' && serviceEditingMatch.action === 'list') {
+        sendJson(response, 200, await context.dependencies.listComposeServices({ composeFilePath: project.composeFilePath }));
+        return;
+      }
+
+      if (request.method === 'POST' && serviceEditingMatch.action === 'preview') {
+        const payload = parseServiceMutationPayload(await readRequestJson(request), project.composeFilePath);
+        const preview = payload.operation === 'create'
+          ? await context.dependencies.previewCreateComposeService(payload.input)
+          : payload.operation === 'update'
+            ? await context.dependencies.previewUpdateComposeService(payload.input)
+            : await context.dependencies.previewDeleteComposeService(payload.input);
+        sendJson(response, 200, preview);
+        return;
+      }
+
+      if (request.method === 'POST' && serviceEditingMatch.action === 'commit') {
+        const payload = parseServiceCommitPayload(await readRequestJson(request));
+        sendJson(response, 200, await context.dependencies.commitComposeServiceMutation(payload));
+        return;
+      }
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/commands/preview') {
       const payload = parseCommandPayload(await readRequestJson(request));
       sendJson(response, 200, await context.dependencies.previewCommand(payload.input));
@@ -348,6 +407,11 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Run
     streamLogs: dependencies.streamLogs ?? streamComposeLogs,
     previewCommand: dependencies.previewCommand ?? ((input) => previewComposeApplicationCommand(input)),
     executeCommand: dependencies.executeCommand ?? ((input) => executeComposeApplicationCommand(input, { processRunner: captureProcessRunner })),
+    listComposeServices: dependencies.listComposeServices ?? listComposeServices,
+    previewCreateComposeService: dependencies.previewCreateComposeService ?? previewCreateComposeService,
+    previewUpdateComposeService: dependencies.previewUpdateComposeService ?? previewUpdateComposeService,
+    previewDeleteComposeService: dependencies.previewDeleteComposeService ?? previewDeleteComposeService,
+    commitComposeServiceMutation: dependencies.commitComposeServiceMutation ?? commitComposeServiceMutation,
   };
 }
 
@@ -646,6 +710,69 @@ function parseCommandPayload(value: unknown): CommandPayload {
   };
 }
 
+type ParsedServiceMutation =
+  | { operation: 'create'; input: PreviewCreateComposeServiceInput }
+  | { operation: 'update'; input: PreviewUpdateComposeServiceInput }
+  | { operation: 'delete'; input: PreviewDeleteComposeServiceInput };
+
+function parseServiceMutationPayload(value: unknown, composeFilePath: string): ParsedServiceMutation {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Service mutation request body must be a JSON object.');
+  }
+
+  const operation = readRequiredString(value.operation, 'operation');
+
+  if (operation === 'create') {
+    if (!isObject(value.service)) {
+      throw new LocalUiHttpError(400, 'invalid-service', 'Create operation requires a service object.');
+    }
+
+    return {
+      operation,
+      input: {
+        composeFilePath,
+        service: value.service as PreviewCreateComposeServiceInput['service'],
+        overwrite: value.overwrite === true,
+      },
+    };
+  }
+
+  if (operation === 'update') {
+    if (!isObject(value.patch)) {
+      throw new LocalUiHttpError(400, 'invalid-service-patch', 'Update operation requires a patch object.');
+    }
+
+    return {
+      operation,
+      input: {
+        composeFilePath,
+        serviceName: readRequiredString(value.serviceName, 'serviceName'),
+        patch: value.patch as PreviewUpdateComposeServiceInput['patch'],
+      },
+    };
+  }
+
+  if (operation === 'delete') {
+    return {
+      operation,
+      input: {
+        composeFilePath,
+        serviceName: readRequiredString(value.serviceName, 'serviceName'),
+      },
+    };
+  }
+
+  throw new LocalUiHttpError(400, 'invalid-operation', 'Service operation must be create, update or delete.');
+}
+
+function parseServiceCommitPayload(value: unknown): CommitComposeServiceMutationInput {
+  if (!isObject(value) || !isObject(value.preview)) {
+    throw new LocalUiHttpError(400, 'invalid-preview', 'Commit request requires a preview object.');
+  }
+
+  return { preview: value.preview as unknown as ComposeServiceMutationPreview };
+}
+
 function readOptions(value: unknown): ComposeApplicationCommandOptions {
   if (value === undefined) {
     return {};
@@ -789,6 +916,23 @@ function matchWorkspacePath(pathname: string): string | undefined {
 function matchStackRuntimePath(pathname: string): string | undefined {
   const match = /^\/api\/stacks\/([^/]+)\/runtime$/.exec(pathname);
   return match?.[1] === undefined ? undefined : decodeURIComponent(match[1]);
+}
+
+type StackServicesRoute = {
+  stackId: string;
+  action: 'list' | 'preview' | 'commit';
+};
+
+function matchStackServicesPath(pathname: string): StackServicesRoute | undefined {
+  const match = /^\/api\/stacks\/([^/]+)\/services(?:\/(preview|commit))?$/.exec(pathname);
+  if (match?.[1] === undefined) {
+    return undefined;
+  }
+
+  return {
+    stackId: decodeURIComponent(match[1]),
+    action: match[2] === 'preview' || match[2] === 'commit' ? match[2] : 'list',
+  };
 }
 
 function findProject(projects: DiscoveredComposeProject[], id: string): DiscoveredComposeProject | undefined {

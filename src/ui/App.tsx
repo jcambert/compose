@@ -1022,21 +1022,25 @@ function StackDetailPanel({
             ) : (
               services.map((service) => {
                 const serviceStatus = status?.services?.[service];
+                const containerCount = serviceStatus?.containerCount ?? 0;
+                const ports = serviceStatus?.ports ?? [];
 
                 return (
                   <article key={service} className="service-card professional-service-card">
                     <div className="service-card-header">
                       <div className="service-title-row">
-                        <strong>{service}</strong>
+                        <strong className="service-name" title={service}>{service}</strong>
                         <StatusPill tone={toneForServiceState(serviceStatus?.state)}>{serviceStatus?.state ?? 'unknown'}</StatusPill>
                       </div>
                       <ServiceActionGroup serviceName={service} state={serviceStatus?.state} onPrepare={onPrepareServiceCommand} onOpenCommands={onOpenCommands} />
                     </div>
-                    <div className="service-runtime-meta">
-                      <span>{serviceStatus?.containerCount ?? 0} containers</span>
-                      {serviceStatus?.containerNames === undefined || serviceStatus.containerNames.length === 0 ? null : <small title={serviceStatus.containerNames.join(', ')}>Containers: {serviceStatus.containerNames.join(', ')}</small>}
-                    </div>
-                    <ServicePortLinks ports={serviceStatus?.ports ?? []} />
+                    {containerCount > 0 ? (
+                      <div className="service-runtime-meta">
+                        <span>{containerCount} {containerCount === 1 ? 'container' : 'containers'}</span>
+                        {serviceStatus?.containerNames === undefined || serviceStatus.containerNames.length === 0 ? null : <small title={serviceStatus.containerNames.join(', ')}>Containers: {serviceStatus.containerNames.join(', ')}</small>}
+                      </div>
+                    ) : null}
+                    {ports.length > 0 ? <ServicePortLinks ports={ports} /> : null}
                   </article>
                 );
               })
@@ -1050,7 +1054,7 @@ function StackDetailPanel({
 
 function ServicePortLinks({ ports }: { ports: string[] }) {
   const links = ports.map((port) => ({ port, link: createPublishedPortLink(port) })).filter((entry) => entry.link !== undefined);
-  if (links.length === 0) return <small className="service-port-empty">No published endpoint</small>;
+  if (links.length === 0) return null;
   return <div className="service-port-list" aria-label="Published service ports"><small>Published ports</small><div>{links.map(({ port, link }) => link === undefined ? null : <a key={port} className="service-port-link" href={link.href} target="_blank" rel="noreferrer" title={link.title}><span>{link.label}</span><span aria-hidden="true">↗</span></a>)}</div></div>;
 }
 

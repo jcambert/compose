@@ -1,0 +1,23 @@
+name: Windows integration
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run test:installed

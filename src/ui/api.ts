@@ -104,14 +104,15 @@ export async function apiDelete<T>(token: string, path: string): Promise<T> {
 }
 
 async function api<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  const requestOptions = {
     cache: 'no-store',
     ...options,
     headers: {
       authorization: `Bearer ${token}`,
       ...options.headers,
     },
-  });
+  } as RequestInit;
+  const response = await fetch(path, requestOptions);
   const value = await response.json() as T | { error?: { message?: string } };
 
   if (!response.ok) {

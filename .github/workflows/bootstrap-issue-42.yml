@@ -1,0 +1,38 @@
+name: Bootstrap issue 42
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/bootstrap-issue-42.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/ui-compose-service-editing
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply implementation
+        shell: bash
+        run: |
+          sed -n "/python - <<'PY'/,/^          PY$/p" .github/workflows/implement-42.yml \
+            | sed '1d;$d;s/^          //' > /tmp/implement-42.py
+          python /tmp/implement-42.py
+      - run: npm ci
+      - run: npm run validate
+      - name: Commit feature
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: add guided Compose service editing UI"
+          git push origin HEAD:feat/ui-compose-service-editing

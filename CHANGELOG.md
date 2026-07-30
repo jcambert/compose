@@ -18,6 +18,7 @@ The project follows a pragmatic semver policy:
 - Added Windows CI validation for guided Compose editing, build, smoke testing and installed-package execution.
 - Added an isolated npm package installation smoke test that supports Windows command shims and paths containing spaces.
 - Added realistic Compose fixtures covering anchors, extension fields, health checks, deploy settings, networks, secrets, configs, LF/CRLF input and stale previews.
+- Added professional runtime service cards with safe command shortcuts and clickable published-port endpoints.
 
 ## 0.2.2 - Local UI polish and agent guidelines
 

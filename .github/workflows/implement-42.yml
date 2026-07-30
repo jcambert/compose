@@ -1,0 +1,742 @@
+name: Implement issue 42
+
+on:
+  push:
+    branches:
+      - feat/ui-compose-service-editing
+    paths:
+      - .github/workflows/implement-42.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: ${{ !contains(github.event.head_commit.message, 'feat: add guided Compose service editing UI') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/ui-compose-service-editing
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply issue 42 implementation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f'Marker not found in {path}: {old[:80]!r}')
+              file.write_text(text.replace(old, new, 1))
+
+          component = r'''import type React from 'react';
+          import { useEffect, useMemo, useState } from 'react';
+          import {
+            apiGet,
+            apiPost,
+            type ComposeServiceForm,
+            type ComposeServiceListResult,
+            type ComposeServiceMutationCommitResult,
+            type ComposeServiceMutationPreview,
+            type DiscoveredComposeProject,
+            type EditableComposeService,
+          } from './api';
+
+          type ServiceEditorViewProps = {
+            token: string;
+            project?: DiscoveredComposeProject;
+            onOpenStacks: () => void;
+          };
+
+          type EditorMode = 'create' | 'edit';
+
+          type FormState = {
+            name: string;
+            image: string;
+            build: string;
+            ports: string;
+            environment: string;
+            volumes: string;
+            dependsOn: string;
+            command: string;
+            restart: string;
+          };
+
+          const emptyForm: FormState = {
+            name: '',
+            image: '',
+            build: '',
+            ports: '',
+            environment: '',
+            volumes: '',
+            dependsOn: '',
+            command: '',
+            restart: '',
+          };
+
+          export function ServiceEditorView({ token, project, onOpenStacks }: ServiceEditorViewProps) {
+            const [services, setServices] = useState<ComposeServiceListResult>();
+            const [selectedName, setSelectedName] = useState<string>();
+            const [mode, setMode] = useState<EditorMode>('create');
+            const [form, setForm] = useState<FormState>(emptyForm);
+            const [preview, setPreview] = useState<ComposeServiceMutationPreview>();
+            const [loading, setLoading] = useState(false);
+            const [busy, setBusy] = useState(false);
+            const [deleteRequested, setDeleteRequested] = useState(false);
+            const [message, setMessage] = useState<string>();
+            const [error, setError] = useState<string>();
+
+            const selectedService = useMemo(
+              () => services?.services.find((service) => service.name === selectedName),
+              [selectedName, services],
+            );
+
+            async function loadServices(preferredName?: string) {
+              if (project === undefined) {
+                setServices(undefined);
+                return;
+              }
+
+              setLoading(true);
+              setError(undefined);
+              try {
+                const result = await apiGet<ComposeServiceListResult>(
+                  token,
+                  `/api/services?composeFilePath=${encodeURIComponent(project.composeFilePath)}`,
+                );
+                setServices(result);
+                const nextName = preferredName ?? selectedName;
+                if (nextName !== undefined && result.services.some((service) => service.name === nextName)) {
+                  setSelectedName(nextName);
+                } else {
+                  setSelectedName(result.services[0]?.name);
+                }
+              } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : 'Unable to load Compose services.');
+              } finally {
+                setLoading(false);
+              }
+            }
+
+            useEffect(() => {
+              setMode('create');
+              setForm(emptyForm);
+              setPreview(undefined);
+              setDeleteRequested(false);
+              setMessage(undefined);
+              void loadServices();
+            }, [project?.id, token]);
+
+            function startCreate() {
+              setMode('create');
+              setForm(emptyForm);
+              setPreview(undefined);
+              setDeleteRequested(false);
+              setMessage(undefined);
+              setError(undefined);
+            }
+
+            function startEdit(service: EditableComposeService) {
+              setMode('edit');
+              setSelectedName(service.name);
+              setForm(toFormState(service));
+              setPreview(undefined);
+              setDeleteRequested(false);
+              setMessage(undefined);
+              setError(undefined);
+            }
+
+            async function previewMutation(operation: 'create' | 'update' | 'delete') {
+              if (project === undefined) {
+                return;
+              }
+
+              setBusy(true);
+              setPreview(undefined);
+              setMessage(undefined);
+              setError(undefined);
+
+              try {
+                const service = toServiceForm(form);
+                const payload = operation === 'create'
+                  ? { operation, composeFilePath: project.composeFilePath, service }
+                  : operation === 'update'
+                    ? { operation, composeFilePath: project.composeFilePath, serviceName: form.name, patch: service }
+                    : { operation, composeFilePath: project.composeFilePath, serviceName: form.name };
+                setPreview(await apiPost<ComposeServiceMutationPreview>(token, '/api/services/preview', payload));
+              } catch (previewError) {
+                setError(previewError instanceof Error ? previewError.message : 'Unable to preview the Compose change.');
+              } finally {
+                setBusy(false);
+              }
+            }
+
+            async function commitMutation() {
+              if (preview === undefined) {
+                return;
+              }
+
+              setBusy(true);
+              setError(undefined);
+              try {
+                const result = await apiPost<ComposeServiceMutationCommitResult>(token, '/api/services/commit', { preview });
+                setMessage(`${result.serviceName} was ${pastTense(result.operation)} successfully.`);
+                setPreview(undefined);
+                setDeleteRequested(false);
+                await loadServices(result.operation === 'delete' ? undefined : result.serviceName);
+                if (result.operation === 'delete') {
+                  startCreate();
+                }
+              } catch (commitError) {
+                setError(commitError instanceof Error ? commitError.message : 'Unable to save the Compose file.');
+              } finally {
+                setBusy(false);
+              }
+            }
+
+            if (project === undefined) {
+              return (
+                <div className="view-stack">
+                  <section className="hero-panel compact-hero">
+                    <div>
+                      <p className="eyebrow">Guided Compose editing</p>
+                      <h2>Select a stack before editing services.</h2>
+                      <p className="muted">The editor works on one detected Compose file at a time.</p>
+                    </div>
+                    <button type="button" onClick={onOpenStacks}>Choose a stack</button>
+                  </section>
+                </div>
+              );
+            }
+
+            return (
+              <div className="view-stack">
+                <section className="hero-panel compact-hero">
+                  <div>
+                    <p className="eyebrow">Guided Compose editing</p>
+                    <h2>Create, update or remove services safely.</h2>
+                    <p className="muted">Review the generated YAML diff before anything is written to disk.</p>
+                  </div>
+                  <div className="actions">
+                    <button type="button" onClick={startCreate}>New service</button>
+                    <button className="secondary" type="button" onClick={() => void loadServices()} disabled={loading}>Refresh</button>
+                  </div>
+                </section>
+
+                {error === undefined ? null : <div className="banner danger">{error}</div>}
+                {message === undefined ? null : <div className="banner info">{message}</div>}
+
+                <section className="service-editor-layout">
+                  <div className="panel service-list-panel">
+                    <div className="panel-heading">
+                      <div><h3>Services</h3><p>{project.name} · {services?.services.length ?? 0} declared</p></div>
+                    </div>
+                    <div className="service-editor-list">
+                      {loading ? <p className="muted">Loading services...</p> : null}
+                      {(services?.services ?? []).map((service) => (
+                        <button
+                          key={service.name}
+                          className={selectedName === service.name && mode === 'edit' ? 'service-editor-item active' : 'service-editor-item'}
+                          type="button"
+                          onClick={() => startEdit(service)}
+                        >
+                          <strong>{service.name}</strong>
+                          <small>{service.image ?? (service.build === undefined ? 'No image or build configured' : 'Built locally')}</small>
+                          <span>{service.readOnlyKeys.length + service.preservedKeys.length} advanced keys preserved</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="panel service-form-panel">
+                    <div className="panel-heading">
+                      <div><h3>{mode === 'create' ? 'Create service' : `Edit ${form.name}`}</h3><p>Common Docker Compose fields</p></div>
+                    </div>
+                    <div className="service-form-grid">
+                      <label>Name<input value={form.name} disabled={mode === 'edit' || busy} onChange={(event) => updateForm(setForm, 'name', event.target.value)} placeholder="api" /></label>
+                      <label>Image<input value={form.image} disabled={busy} onChange={(event) => updateForm(setForm, 'image', event.target.value)} placeholder="nginx:alpine" /></label>
+                      <label>Build context<input value={form.build} disabled={busy} onChange={(event) => updateForm(setForm, 'build', event.target.value)} placeholder="." /></label>
+                      <label>Restart policy<input value={form.restart} disabled={busy} onChange={(event) => updateForm(setForm, 'restart', event.target.value)} placeholder="unless-stopped" /></label>
+                      <label className="wide">Ports<textarea value={form.ports} disabled={busy} onChange={(event) => updateForm(setForm, 'ports', event.target.value)} placeholder={'8080:80\n8443:443'} /></label>
+                      <label className="wide">Environment<textarea value={form.environment} disabled={busy} onChange={(event) => updateForm(setForm, 'environment', event.target.value)} placeholder={'NODE_ENV=production\nLOG_LEVEL=info'} /></label>
+                      <label className="wide">Volumes<textarea value={form.volumes} disabled={busy} onChange={(event) => updateForm(setForm, 'volumes', event.target.value)} placeholder={'./data:/app/data\ncache:/cache'} /></label>
+                      <label className="wide">Depends on<textarea value={form.dependsOn} disabled={busy} onChange={(event) => updateForm(setForm, 'dependsOn', event.target.value)} placeholder={'database\nredis'} /></label>
+                      <label className="wide">Command<input value={form.command} disabled={busy} onChange={(event) => updateForm(setForm, 'command', event.target.value)} placeholder="npm run start" /></label>
+                    </div>
+                    <p className="muted editor-note">Unknown, advanced and read-only keys remain in the service definition when editing common fields.</p>
+                    <div className="actions">
+                      <button type="button" disabled={busy || form.name.trim() === ''} onClick={() => void previewMutation(mode === 'create' ? 'create' : 'update')}>
+                        {busy ? 'Preparing...' : 'Preview YAML change'}
+                      </button>
+                      {mode === 'edit' && !deleteRequested ? <button className="danger" type="button" disabled={busy} onClick={() => setDeleteRequested(true)}>Delete service</button> : null}
+                      {deleteRequested ? <button className="danger" type="button" disabled={busy} onClick={() => void previewMutation('delete')}>Preview deletion</button> : null}
+                      {deleteRequested ? <button className="ghost" type="button" disabled={busy} onClick={() => setDeleteRequested(false)}>Cancel</button> : null}
+                    </div>
+                  </div>
+                </section>
+
+                {preview === undefined ? null : (
+                  <section className="panel diff-panel">
+                    <div className="panel-heading">
+                      <div><h3>Review YAML diff</h3><p>{preview.operation} · {preview.serviceName}</p></div>
+                      <span className="status-pill ok">Validated</span>
+                    </div>
+                    {preview.warnings.length === 0 ? null : <div className="banner warning">{preview.warnings.join(' · ')}</div>}
+                    <pre className="yaml-diff">{preview.diff}</pre>
+                    <div className="actions">
+                      <button type="button" disabled={busy} onClick={() => void commitMutation()}>{busy ? 'Saving...' : 'Apply change'}</button>
+                      <button className="secondary" type="button" disabled={busy} onClick={() => setPreview(undefined)}>Discard preview</button>
+                    </div>
+                  </section>
+                )}
+              </div>
+            );
+          }
+
+          function updateForm(setForm: React.Dispatch<React.SetStateAction<FormState>>, key: keyof FormState, value: string) {
+            setForm((current) => ({ ...current, [key]: value }));
+          }
+
+          function toFormState(service: EditableComposeService): FormState {
+            return {
+              name: service.name,
+              image: service.image ?? '',
+              build: typeof service.build === 'string' ? service.build : '',
+              ports: service.ports.join('\n'),
+              environment: service.environment.map((entry) => `${entry.name}=${entry.value}`).join('\n'),
+              volumes: service.volumes.join('\n'),
+              dependsOn: service.dependsOn.join('\n'),
+              command: Array.isArray(service.command) ? service.command.join(' ') : service.command ?? '',
+              restart: service.restart ?? '',
+            };
+          }
+
+          function toServiceForm(form: FormState): ComposeServiceForm {
+            return {
+              name: form.name.trim(),
+              ...(nonEmpty(form.image) === undefined ? {} : { image: nonEmpty(form.image) }),
+              ...(nonEmpty(form.build) === undefined ? {} : { build: nonEmpty(form.build) }),
+              ports: lines(form.ports),
+              environment: lines(form.environment).map((entry) => {
+                const separator = entry.indexOf('=');
+                return separator < 0 ? { name: entry, value: '' } : { name: entry.slice(0, separator), value: entry.slice(separator + 1) };
+              }),
+              volumes: lines(form.volumes),
+              dependsOn: lines(form.dependsOn),
+              ...(nonEmpty(form.command) === undefined ? {} : { command: nonEmpty(form.command) }),
+              ...(nonEmpty(form.restart) === undefined ? {} : { restart: nonEmpty(form.restart) }),
+            };
+          }
+
+          function lines(value: string): string[] {
+            return value.split(/\r?\n/).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+          }
+
+          function nonEmpty(value: string): string | undefined {
+            const normalized = value.trim();
+            return normalized.length === 0 ? undefined : normalized;
+          }
+
+          function pastTense(operation: ComposeServiceMutationPreview['operation']): string {
+            return operation === 'create' ? 'created' : operation === 'update' ? 'updated' : 'deleted';
+          }
+          '''
+          Path('src/ui/ServiceEditorView.tsx').write_text(component)
+
+          api = Path('src/ui/api.ts')
+          api.write_text(api.read_text() + r'''
+
+          export type ComposeEnvironmentEntry = {
+            name: string;
+            value: string;
+          };
+
+          export type ComposeServiceForm = {
+            name: string;
+            image?: string;
+            build?: string | Record<string, unknown>;
+            ports?: string[];
+            environment?: ComposeEnvironmentEntry[];
+            volumes?: string[];
+            dependsOn?: string[];
+            command?: string | string[];
+            restart?: string;
+          };
+
+          export type EditableComposeService = ComposeServiceForm & {
+            ports: string[];
+            environment: ComposeEnvironmentEntry[];
+            volumes: string[];
+            dependsOn: string[];
+            readOnlyKeys: string[];
+            preservedKeys: string[];
+          };
+
+          export type ComposeServiceListResult = {
+            composeFilePath: string;
+            contentHash: string;
+            services: EditableComposeService[];
+          };
+
+          export type ComposeServiceMutationPreview = {
+            operation: 'create' | 'update' | 'delete';
+            composeFilePath: string;
+            serviceName: string;
+            originalContentHash: string;
+            beforeYaml?: string;
+            afterYaml?: string;
+            diff: string;
+            nextContent: string;
+            validation: { success: true; errors: [] };
+            warnings: string[];
+          };
+
+          export type ComposeServiceMutationCommitResult = {
+            composeFilePath: string;
+            operation: ComposeServiceMutationPreview['operation'];
+            serviceName: string;
+            contentHash: string;
+          };
+          ''')
+
+          replace_once('src/ui/App.tsx', "} from './api';\n", "} from './api';\nimport { ServiceEditorView } from './ServiceEditorView';\n")
+          replace_once('src/ui/App.tsx', "type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'doctor' | 'commands';", "type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'services' | 'doctor' | 'commands';")
+          replace_once('src/ui/App.tsx', "        {activeView === 'doctor' ? <DoctorView report={state.doctor} loading={state.loading} /> : null}\n", "        {activeView === 'services' ? (\n          <ServiceEditorView token={token} project={selectedProject} onOpenStacks={() => setActiveView('stacks')} />\n        ) : null}\n\n        {activeView === 'doctor' ? <DoctorView report={state.doctor} loading={state.loading} /> : null}\n")
+          replace_once('src/ui/App.tsx', "        <NavButton active={activeView === 'doctor'} label=\"Doctor\"", "        <NavButton active={activeView === 'services'} label=\"Services\" description=\"Guided YAML editor\" onClick={() => setActiveView('services')} />\n        <NavButton active={activeView === 'doctor'} label=\"Doctor\"")
+
+          server = Path('src/app/ui-server-service.ts')
+          text = server.read_text()
+          text = text.replace("import { runDoctor } from './doctor-service.js';", "import {\n  commitComposeServiceMutation,\n  listComposeServices,\n  previewCreateComposeService,\n  previewDeleteComposeService,\n  previewUpdateComposeService,\n} from './compose-editing-service.js';\nimport type {\n  CommitComposeServiceMutationInput,\n  ComposeServiceListResult,\n  ComposeServiceMutationCommitResult,\n  PreviewCreateComposeServiceInput,\n  PreviewDeleteComposeServiceInput,\n  PreviewUpdateComposeServiceInput,\n} from './compose-editing-service.js';\nimport { runDoctor } from './doctor-service.js';")
+          text = text.replace("  executeCommand?: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;\n};", "  executeCommand?: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;\n  listComposeServices?: (input: { composeFilePath: string }) => Promise<ComposeServiceListResult>;\n  previewCreateComposeService?: (input: PreviewCreateComposeServiceInput) => Promise<unknown>;\n  previewUpdateComposeService?: (input: PreviewUpdateComposeServiceInput) => Promise<unknown>;\n  previewDeleteComposeService?: (input: PreviewDeleteComposeServiceInput) => Promise<unknown>;\n  commitComposeServiceMutation?: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;\n};")
+          text = text.replace("  executeCommand: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;\n};", "  executeCommand: (input: ComposeApplicationCommandInput) => Promise<ComposeApplicationCommandResult>;\n  listComposeServices: (input: { composeFilePath: string }) => Promise<ComposeServiceListResult>;\n  previewCreateComposeService: (input: PreviewCreateComposeServiceInput) => Promise<unknown>;\n  previewUpdateComposeService: (input: PreviewUpdateComposeServiceInput) => Promise<unknown>;\n  previewDeleteComposeService: (input: PreviewDeleteComposeServiceInput) => Promise<unknown>;\n  commitComposeServiceMutation: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;\n};")
+          route_marker = "    if (request.method === 'POST' && url.pathname === '/api/commands/preview') {"
+          routes = r'''    if (request.method === 'GET' && url.pathname === '/api/services') {
+              const composeFilePath = readRequiredStringQuery(url, 'composeFilePath');
+              sendJson(response, 200, await context.dependencies.listComposeServices({ composeFilePath }));
+              return;
+            }
+
+            if (request.method === 'POST' && url.pathname === '/api/services/preview') {
+              const payload = parseServiceMutationPayload(await readRequestJson(request));
+              if (payload.operation === 'create') {
+                sendJson(response, 200, await context.dependencies.previewCreateComposeService(payload.input));
+              } else if (payload.operation === 'update') {
+                sendJson(response, 200, await context.dependencies.previewUpdateComposeService(payload.input));
+              } else {
+                sendJson(response, 200, await context.dependencies.previewDeleteComposeService(payload.input));
+              }
+              return;
+            }
+
+            if (request.method === 'POST' && url.pathname === '/api/services/commit') {
+              const payload = parseComposeServiceCommitPayload(await readRequestJson(request));
+              try {
+                sendJson(response, 200, await context.dependencies.commitComposeServiceMutation(payload));
+              } catch (error) {
+                if (error instanceof Error && error.message.includes('changed since preview')) {
+                  throw new LocalUiHttpError(409, 'compose-file-changed', error.message);
+                }
+                throw error;
+              }
+              return;
+            }
+
+          '''
+          if route_marker not in text:
+              raise SystemExit('server route marker missing')
+          text = text.replace(route_marker, routes + route_marker, 1)
+          text = text.replace("    executeCommand: dependencies.executeCommand ?? ((input) => executeComposeApplicationCommand(input, { processRunner: captureProcessRunner })),\n", "    executeCommand: dependencies.executeCommand ?? ((input) => executeComposeApplicationCommand(input, { processRunner: captureProcessRunner })),\n    listComposeServices: dependencies.listComposeServices ?? listComposeServices,\n    previewCreateComposeService: dependencies.previewCreateComposeService ?? previewCreateComposeService,\n    previewUpdateComposeService: dependencies.previewUpdateComposeService ?? previewUpdateComposeService,\n    previewDeleteComposeService: dependencies.previewDeleteComposeService ?? previewDeleteComposeService,\n    commitComposeServiceMutation: dependencies.commitComposeServiceMutation ?? commitComposeServiceMutation,\n")
+          parser_marker = "function parseCommandPayload(value: unknown): CommandPayload {"
+          parsers = r'''type ServiceMutationPayload =
+            | { operation: 'create'; input: PreviewCreateComposeServiceInput }
+            | { operation: 'update'; input: PreviewUpdateComposeServiceInput }
+            | { operation: 'delete'; input: PreviewDeleteComposeServiceInput };
+
+          function parseServiceMutationPayload(value: unknown): ServiceMutationPayload {
+            if (!isObject(value)) {
+              throw new LocalUiHttpError(400, 'invalid-json', 'Service mutation request body must be a JSON object.');
+            }
+
+            const composeFilePath = readRequiredString(value.composeFilePath, 'composeFilePath');
+            if (value.operation === 'create') {
+              if (!isObject(value.service)) {
+                throw new LocalUiHttpError(400, 'invalid-service', 'Create mutation requires a service object.');
+              }
+              return { operation: 'create', input: { composeFilePath, service: value.service as PreviewCreateComposeServiceInput['service'] } };
+            }
+            if (value.operation === 'update') {
+              if (!isObject(value.patch)) {
+                throw new LocalUiHttpError(400, 'invalid-service-patch', 'Update mutation requires a patch object.');
+              }
+              return {
+                operation: 'update',
+                input: {
+                  composeFilePath,
+                  serviceName: readRequiredString(value.serviceName, 'serviceName'),
+                  patch: value.patch as PreviewUpdateComposeServiceInput['patch'],
+                },
+              };
+            }
+            if (value.operation === 'delete') {
+              return {
+                operation: 'delete',
+                input: { composeFilePath, serviceName: readRequiredString(value.serviceName, 'serviceName') },
+              };
+            }
+            throw new LocalUiHttpError(400, 'invalid-operation', 'Service mutation operation must be create, update or delete.');
+          }
+
+          function parseComposeServiceCommitPayload(value: unknown): CommitComposeServiceMutationInput {
+            if (!isObject(value) || !isObject(value.preview)) {
+              throw new LocalUiHttpError(400, 'invalid-preview', 'Commit request requires a preview object.');
+            }
+            return { preview: value.preview as CommitComposeServiceMutationInput['preview'] };
+          }
+
+          '''
+          if parser_marker not in text:
+              raise SystemExit('server parser marker missing')
+          text = text.replace(parser_marker, parsers + parser_marker, 1)
+          server.write_text(text)
+
+          replace_once('src/app/index.ts', "export * from './compose-command-service.js';\n", "export * from './compose-command-service.js';\nexport * from './compose-editing-service.js';\n")
+
+          styles = Path('src/ui/styles.css')
+          styles.write_text(styles.read_text() + r'''
+
+          .service-editor-layout {
+            display: grid;
+            grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 2fr);
+            gap: 1rem;
+          }
+
+          .service-editor-list {
+            display: grid;
+            gap: 0.65rem;
+            max-height: 38rem;
+            overflow: auto;
+          }
+
+          .service-editor-item {
+            display: grid;
+            gap: 0.3rem;
+            width: 100%;
+            padding: 0.9rem;
+            text-align: left;
+            border: 1px solid var(--border);
+            background: var(--surface-muted);
+          }
+
+          .service-editor-item.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+          }
+
+          .service-editor-item small,
+          .service-editor-item span {
+            color: var(--muted);
+          }
+
+          .service-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.9rem;
+          }
+
+          .service-form-grid label {
+            display: grid;
+            gap: 0.4rem;
+          }
+
+          .service-form-grid .wide {
+            grid-column: 1 / -1;
+          }
+
+          .service-form-grid textarea {
+            min-height: 6rem;
+            resize: vertical;
+          }
+
+          .editor-note {
+            margin-top: 0.8rem;
+          }
+
+          .diff-panel {
+            display: grid;
+            gap: 1rem;
+          }
+
+          .yaml-diff {
+            max-height: 32rem;
+            overflow: auto;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.8rem;
+            background: #08111f;
+            color: #dbeafe;
+            white-space: pre;
+          }
+
+          @media (max-width: 900px) {
+            .service-editor-layout,
+            .service-form-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+          ''')
+
+          test = r'''import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+          import { tmpdir } from 'node:os';
+          import { join } from 'node:path';
+          import { afterEach, describe, expect, it } from 'vitest';
+          import { startLocalUiServer } from '../../src/app/ui-server-service.js';
+          import type { LocalUiServer } from '../../src/app/ui-server-service.js';
+
+          const token = 'service-editor-token';
+          const temporaryDirectories: string[] = [];
+
+          afterEach(async () => {
+            await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+          });
+
+          describe('local UI Compose service editing API', () => {
+            it('lists, previews and commits a guided service mutation', async () => {
+              const directory = await mkdtemp(join(tmpdir(), 'compose-ui-edit-'));
+              temporaryDirectories.push(directory);
+              const composeFilePath = join(directory, 'compose.yaml');
+              await writeFile(composeFilePath, 'services:\n  api:\n    image: node:22\n    labels:\n      owner: platform\n', 'utf8');
+              const server = await startLocalUiServer({ token, open: false });
+
+              try {
+                const listed = await getJson(server, `/api/services?composeFilePath=${encodeURIComponent(composeFilePath)}`);
+                expect(listed.services).toEqual([
+                  expect.objectContaining({ name: 'api', image: 'node:22', readOnlyKeys: ['labels'] }),
+                ]);
+
+                const preview = await postJson(server, '/api/services/preview', {
+                  operation: 'update',
+                  composeFilePath,
+                  serviceName: 'api',
+                  patch: { image: 'node:24', ports: ['3000:3000'] },
+                });
+                expect(preview).toMatchObject({ operation: 'update', serviceName: 'api' });
+                expect(preview.diff).toContain('node:24');
+                expect(preview.warnings).toContain('Service key preserved by the guided editor: labels');
+
+                const committed = await postJson(server, '/api/services/commit', { preview });
+                expect(committed).toMatchObject({ operation: 'update', serviceName: 'api' });
+                const content = await readFile(composeFilePath, 'utf8');
+                expect(content).toContain('node:24');
+                expect(content).toContain('owner: platform');
+                expect(content).toContain('3000:3000');
+              } finally {
+                await server.close();
+              }
+            });
+
+            it('rejects a stale preview with a conflict response', async () => {
+              const directory = await mkdtemp(join(tmpdir(), 'compose-ui-conflict-'));
+              temporaryDirectories.push(directory);
+              const composeFilePath = join(directory, 'compose.yaml');
+              await writeFile(composeFilePath, 'services:\n  api:\n    image: node:22\n', 'utf8');
+              const server = await startLocalUiServer({ token, open: false });
+
+              try {
+                const preview = await postJson(server, '/api/services/preview', {
+                  operation: 'update',
+                  composeFilePath,
+                  serviceName: 'api',
+                  patch: { image: 'node:24' },
+                });
+                await writeFile(composeFilePath, 'services:\n  api:\n    image: node:23\n', 'utf8');
+                const response = await post(server, '/api/services/commit', { preview });
+                expect(response.status).toBe(409);
+              } finally {
+                await server.close();
+              }
+            });
+          });
+
+          async function getJson(server: LocalUiServer, path: string): Promise<any> {
+            const response = await fetch(`http://${server.host}:${server.port}${path}`, { headers: { authorization: `Bearer ${token}` } });
+            expect(response.status).toBe(200);
+            return response.json();
+          }
+
+          async function postJson(server: LocalUiServer, path: string, body: unknown): Promise<any> {
+            const response = await post(server, path, body);
+            expect(response.status).toBe(200);
+            return response.json();
+          }
+
+          function post(server: LocalUiServer, path: string, body: unknown): Promise<Response> {
+            return fetch(`http://${server.host}:${server.port}${path}`, {
+              method: 'POST',
+              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+          }
+          '''
+          Path('tests/unit/ui-compose-editing.test.ts').write_text(test)
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text()
+          marker = '## [Unreleased]\n'
+          entry = '\n### Added\n\n- Add guided Compose service creation, editing and deletion to `compose ui`, with YAML diff preview, validation, explicit commit and stale-file conflict protection.\n'
+          if marker in text and entry.strip() not in text:
+              text = text.replace(marker, marker + entry, 1)
+          changelog.write_text(text)
+
+          doc = Path('docs/local-ui-server.md')
+          doc.write_text(doc.read_text() + r'''
+
+          ## Guided Compose service editing
+
+          The local UI exposes a dedicated **Services** view for the selected stack. It lists editable service definitions and provides guided forms for common fields such as image, build context, ports, environment variables, volumes, dependencies, command and restart policy.
+
+          Every mutation follows the same safe sequence:
+
+          1. load the current Compose document and its content hash;
+          2. generate and validate a YAML mutation preview;
+          3. display the unified diff and preserved advanced-key warnings;
+          4. commit only after explicit user confirmation;
+          5. reject the commit with HTTP `409` when the file changed after preview.
+
+          Token-protected endpoints:
+
+          - `GET /api/services?composeFilePath=...`
+          - `POST /api/services/preview`
+          - `POST /api/services/commit`
+          ''')
+
+          backlog = Path('docs/backlog.md')
+          if backlog.exists():
+              text = backlog.read_text()
+              text = text.replace('#42', '#42 ✅', 1) if '#42' in text and '#42 ✅' not in text else text
+              backlog.write_text(text)
+
+          roadmap = Path('docs/gui-roadmap.md')
+          if roadmap.exists():
+              text = roadmap.read_text()
+              note = '\n- Guided Compose service editor integrated into the local React UI with preview/commit workflow and conflict protection (#42).\n'
+              if note.strip() not in text:
+                  text += note
+              roadmap.write_text(text)
+          PY
+      - run: npm ci
+      - run: npm run validate
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: add guided Compose service editing UI"
+          git push origin HEAD:feat/ui-compose-service-editing

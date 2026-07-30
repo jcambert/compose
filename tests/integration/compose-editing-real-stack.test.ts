@@ -17,8 +17,8 @@ const fixturePath = resolve(dirname(fileURLToPath(import.meta.url)), '../fixture
 async function copyFixture(lineEnding: '\n' | '\r\n' = '\n'): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'compose-real-stack-'));
   const composeFilePath = join(root, 'compose.yaml');
-  const content = (await readFile(fixturePath, 'utf8')).replace(/\n/g, lineEnding);
-  await writeFile(composeFilePath, content, 'utf8');
+  const normalized = (await readFile(fixturePath, 'utf8')).replace(/\r\n/g, '\n');
+  await writeFile(composeFilePath, normalized.replace(/\n/g, lineEnding), 'utf8');
   return composeFilePath;
 }
 

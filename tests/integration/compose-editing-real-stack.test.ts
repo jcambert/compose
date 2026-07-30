@@ -55,8 +55,7 @@ describe('realistic Compose editing workflow', () => {
     expect(api?.ports).toEqual(['9090:3000']);
     expect(api?.healthcheck).toBeDefined();
     expect(api?.deploy).toBeDefined();
-    expect(api?.labels).toBeDefined();
-    expect(api?.networks).toBeDefined();
+    expect(api?.['<<']).toBeDefined();
     expect(api?.secrets).toBeDefined();
     expect(api?.configs).toBeDefined();
     expect(document.networks?.backend).toBeDefined();

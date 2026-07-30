@@ -137,6 +137,76 @@ describe('local UI server application service', () => {
     }
   });
 
+  it('activates an explicitly requested CLI workspace before serving stacks', async () => {
+    let currentWorkspaceName = 'ia';
+    const scannedRoots: string[] = [];
+    const workspaces: WorkspaceDefinition[] = [
+      {
+        name: 'dev',
+        path: '/workspace/dev',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        name: 'ia',
+        path: '/workspace/ia',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const server = await startTestServer({
+      listWorkspaces: async () => ({ workspaces, currentWorkspaceName }),
+      setWorkspace: async ({ name }) => {
+        currentWorkspaceName = name;
+      },
+      scanProjects: async ({ root }) => {
+        scannedRoots.push(root ?? '.');
+        return [project];
+      },
+    }, { workspaceName: 'dev' });
+
+    try {
+      const workspacesResult = await getJson(server, '/api/workspaces');
+      const stacks = await getJson(server, '/api/stacks');
+
+      expect(workspacesResult).toMatchObject({ currentWorkspaceName: 'dev' });
+      expect(stacks).toMatchObject({ root: '/workspace/dev', workspaceName: 'dev' });
+      expect(scannedRoots).toEqual(['/workspace/dev']);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('uses the last active workspace when no CLI workspace is provided', async () => {
+    const scannedRoots: string[] = [];
+    const server = await startTestServer({
+      listWorkspaces: async () => ({
+        currentWorkspaceName: 'ia',
+        workspaces: [
+          {
+            name: 'ia',
+            path: '/workspace/ia',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+      scanProjects: async ({ root }) => {
+        scannedRoots.push(root ?? '.');
+        return [project];
+      },
+    });
+
+    try {
+      const stacks = await getJson(server, '/api/stacks');
+
+      expect(stacks).toMatchObject({ root: '/workspace/ia', workspaceName: 'ia' });
+      expect(scannedRoots).toEqual(['/workspace/ia']);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('manages workspaces through token-protected local API endpoints', async () => {
     let currentWorkspaceName: string | undefined = 'dev';
     let workspaces: WorkspaceDefinition[] = [

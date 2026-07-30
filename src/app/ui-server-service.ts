@@ -191,6 +191,7 @@ export async function startLocalUiServer(
 ): Promise<LocalUiServer> {
   const token = options.token ?? randomBytes(24).toString('hex');
   const runtimeDependencies = createRuntimeDependencies(dependencies);
+  await activateRequestedWorkspace(options.workspaceName, runtimeDependencies);
   const context: RequestContext = {
     token,
     options,
@@ -415,6 +416,24 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Run
   };
 }
 
+async function activateRequestedWorkspace(
+  workspaceName: string | undefined,
+  dependencies: RuntimeDependencies,
+): Promise<void> {
+  if (workspaceName === undefined) {
+    return;
+  }
+
+  const workspaces = await dependencies.listWorkspaces();
+  const workspaceExists = workspaces.workspaces.some((workspace) => workspace.name === workspaceName);
+
+  if (!workspaceExists) {
+    throw new Error(`Workspace not found: ${workspaceName}`);
+  }
+
+  await dependencies.setWorkspace({ name: workspaceName });
+}
+
 async function resolveStackScanContext(url: URL, context: RequestContext): Promise<StackScanContext> {
   const root = readOptionalStringQuery(url, 'root');
   const maxDepth = readOptionalIntegerQuery(url, 'maxDepth');
@@ -423,7 +442,7 @@ async function resolveStackScanContext(url: URL, context: RequestContext): Promi
     return { root, ...(maxDepth === undefined ? {} : { maxDepth }) };
   }
 
-  const workspaceName = readOptionalStringQuery(url, 'workspace') ?? context.options.workspaceName;
+  const workspaceName = readOptionalStringQuery(url, 'workspace');
   const workspaceResult = await context.dependencies.listWorkspaces();
 
   if (workspaceName !== undefined) {

@@ -263,3 +263,8 @@ The local React UI now exposes the #41 editing engine through stack-scoped endpo
 ## Completed: Windows and real-stack hardening (#44)
 
 The installed npm package is exercised from an isolated prefix on Windows-compatible paths. Realistic fixtures verify that guided mutations preserve advanced Compose sections, handle LF and CRLF input, and reject stale previews. A dedicated Windows GitHub Actions workflow validates the editing flow, build, smoke test and installed package.
+
+
+## Completed: professional service runtime cards (#45)
+
+The selected-stack runtime view presents each service with a clear state badge, clickable published endpoints and a compact action group for start, restart, stop, logs and advanced command preparation. Actions continue to use the existing preview and confirmation workflow.

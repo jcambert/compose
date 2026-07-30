@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { ServicesView } from './ServicesView';
+import { createPublishedPortLink } from './service-runtime-ui';
 import {
   apiDelete,
   apiGet,
@@ -135,6 +136,11 @@ export function App({ token }: AppProps) {
     } catch (error) {
       setRuntime({ loading: false, error: error instanceof Error ? error.message : 'Runtime unavailable.' });
     }
+  }
+
+  function prepareServiceCommand(command: string, serviceName: string) {
+    setForm({ command, serviceName, confirmed: false, destructiveConfirmed: false, busy: false });
+    setActiveView('commands');
   }
 
   async function saveWorkspaceFromUi() {
@@ -337,6 +343,7 @@ export function App({ token }: AppProps) {
               clearCommandFeedback(setForm);
             }}
             onOpenCommands={() => setActiveView('commands')}
+            onPrepareServiceCommand={prepareServiceCommand}
             onRefreshRuntime={() => void refreshRuntime()}
           />
         ) : null}
@@ -669,6 +676,7 @@ function StacksView({
   setSort,
   onSelect,
   onOpenCommands,
+  onPrepareServiceCommand,
   onRefreshRuntime,
 }: {
   stacks?: StackListResult;
@@ -682,6 +690,7 @@ function StacksView({
   setSort: (value: StackSortMode) => void;
   onSelect: (id: string) => void;
   onOpenCommands: () => void;
+  onPrepareServiceCommand: (command: string, serviceName: string) => void;
   onRefreshRuntime: () => void;
 }) {
   return (
@@ -724,7 +733,7 @@ function StacksView({
               ))
             )}
           </div>
-          <StackDetailPanel project={selectedProject} runtime={runtime} onOpenCommands={onOpenCommands} onRefreshRuntime={onRefreshRuntime} />
+          <StackDetailPanel project={selectedProject} runtime={runtime} onOpenCommands={onOpenCommands} onPrepareServiceCommand={onPrepareServiceCommand} onRefreshRuntime={onRefreshRuntime} />
         </div>
       </Panel>
     </div>
@@ -969,11 +978,13 @@ function StackDetailPanel({
   project,
   runtime,
   onOpenCommands,
+  onPrepareServiceCommand,
   onRefreshRuntime,
 }: {
   project?: DiscoveredComposeProject;
   runtime: RuntimeState;
   onOpenCommands: () => void;
+  onPrepareServiceCommand: (command: string, serviceName: string) => void;
   onRefreshRuntime: () => void;
 }) {
   const services = project?.services ?? [];
@@ -1013,14 +1024,19 @@ function StackDetailPanel({
                 const serviceStatus = status?.services?.[service];
 
                 return (
-                  <article key={service} className="service-card">
-                    <div className="service-title-row">
-                      <strong>{service}</strong>
-                      <StatusPill tone={toneForServiceState(serviceStatus?.state)}>{serviceStatus?.state ?? 'unknown'}</StatusPill>
+                  <article key={service} className="service-card professional-service-card">
+                    <div className="service-card-header">
+                      <div className="service-title-row">
+                        <strong>{service}</strong>
+                        <StatusPill tone={toneForServiceState(serviceStatus?.state)}>{serviceStatus?.state ?? 'unknown'}</StatusPill>
+                      </div>
+                      <ServiceActionGroup serviceName={service} state={serviceStatus?.state} onPrepare={onPrepareServiceCommand} onOpenCommands={onOpenCommands} />
                     </div>
-                    <span>{serviceStatus?.containerCount ?? 0} containers</span>
-                    {serviceStatus?.ports === undefined || serviceStatus.ports.length === 0 ? <small>No exposed port detected</small> : <small>Ports: {serviceStatus.ports.join(', ')}</small>}
-                    {serviceStatus?.containerNames === undefined || serviceStatus.containerNames.length === 0 ? null : <small>Containers: {serviceStatus.containerNames.join(', ')}</small>}
+                    <div className="service-runtime-meta">
+                      <span>{serviceStatus?.containerCount ?? 0} containers</span>
+                      {serviceStatus?.containerNames === undefined || serviceStatus.containerNames.length === 0 ? null : <small title={serviceStatus.containerNames.join(', ')}>Containers: {serviceStatus.containerNames.join(', ')}</small>}
+                    </div>
+                    <ServicePortLinks ports={serviceStatus?.ports ?? []} />
                   </article>
                 );
               })
@@ -1030,6 +1046,27 @@ function StackDetailPanel({
       )}
     </section>
   );
+}
+
+function ServicePortLinks({ ports }: { ports: string[] }) {
+  const links = ports.map((port) => ({ port, link: createPublishedPortLink(port) })).filter((entry) => entry.link !== undefined);
+  if (links.length === 0) return <small className="service-port-empty">No published endpoint</small>;
+  return <div className="service-port-list" aria-label="Published service ports"><small>Published ports</small><div>{links.map(({ port, link }) => link === undefined ? null : <a key={port} className="service-port-link" href={link.href} target="_blank" rel="noreferrer" title={link.title}><span>{link.label}</span><span aria-hidden="true">↗</span></a>)}</div></div>;
+}
+
+function ServiceActionGroup({ serviceName, state, onPrepare, onOpenCommands }: { serviceName: string; state?: string; onPrepare: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {
+  const running = state?.toLowerCase().includes('running') === true;
+  return <div className="service-action-group" role="group" aria-label={`Actions for ${serviceName}`}>
+    <ServiceActionButton label="Start" icon="▶" disabled={running} onClick={() => onPrepare('start', serviceName)} />
+    <ServiceActionButton label="Restart" icon="↻" disabled={!running} onClick={() => onPrepare('restart', serviceName)} />
+    <ServiceActionButton label="Stop" icon="■" disabled={!running} onClick={() => onPrepare('stop', serviceName)} />
+    <ServiceActionButton label="Logs" icon="≡" onClick={() => onPrepare('logs', serviceName)} />
+    <ServiceActionButton label="More commands" icon="⋮" onClick={onOpenCommands} />
+  </div>;
+}
+
+function ServiceActionButton({ label, icon, disabled = false, onClick }: { label: string; icon: string; disabled?: boolean; onClick: () => void }) {
+  return <button className="service-action-button" type="button" title={label} aria-label={label} disabled={disabled} onClick={onClick}><span aria-hidden="true">{icon}</span></button>;
 }
 
 function MetricCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: 'ok' | 'warning' | 'danger' | 'info' }) {

@@ -30,9 +30,22 @@ await exec(npmExecutable, ['install', '--prefix', installRoot, tarball], { ...np
 const binary = windows
   ? join(installRoot, 'node_modules', '.bin', 'compose.cmd')
   : join(installRoot, 'node_modules', '.bin', 'compose');
-const executionOptions = { cwd: root, shell: windows };
-const version = await exec(binary, ['--version'], executionOptions);
-const scan = await exec(binary, ['scan', stackRoot, '--json'], executionOptions);
+
+async function runInstalled(args) {
+  if (!windows) {
+    return exec(binary, args, { cwd: root });
+  }
+
+  const command = `call "${binary}" ${args.map(quoteWindowsArgument).join(' ')}`;
+  return exec(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', command], { cwd: root });
+}
+
+function quoteWindowsArgument(value) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+const version = await runInstalled(['--version']);
+const scan = await runInstalled(['scan', stackRoot, '--json']);
 const projects = JSON.parse(scan.stdout);
 
 if (!version.stdout.trim().startsWith('0.2.2')) throw new Error(`Unexpected installed version: ${version.stdout}`);

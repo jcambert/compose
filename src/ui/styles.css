@@ -791,4 +791,21 @@ small {
 .service-action-feedback.error { color: #fca5a5; }
 
 
-.service-port-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 3.2rem; padding: .38rem .55rem; border: 1px solid rgba(56,189,248,.3); border-radius: .55rem; background: rgba(14,116,144,.12); color: #7dd3fc; font-size: .76rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.service-port-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 3.2rem; padding: .38rem .55rem; border: 1px solid rgba(56,189,248,.3); border-radius: .55rem; background: rgba(14,116,144,.12); color: #7dd3fc; font-size: .76rem; font-weight: 700; font-variant-numeric: tabular-nums; 
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+
+.service-port-chip:hover,
+.service-port-chip:focus-visible {
+  border-color: var(--accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.14);
+  transform: translateY(-1px);
+  outline: none;
+}

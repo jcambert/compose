@@ -1120,7 +1120,28 @@ function StackDetailPanel({
 function ServicePortLinks({ ports }: { ports: string[] }) {
   const publishedPorts = extractPublishedHostPorts(ports);
   if (publishedPorts.length === 0) return null;
-  return <div className="service-port-list" aria-label="Published local ports"><small>Published ports</small><div>{publishedPorts.map((port) => <span key={port} className="service-port-chip" title={`Published local port ${port}`}>{port}</span>)}</div></div>;
+
+  return (
+    <div className="service-port-list" aria-label="Published local ports">
+      <small>Published ports</small>
+      <div>
+        {publishedPorts.map((port) => (
+          <a
+            key={port}
+            className="service-port-chip"
+            href={`http://localhost:${port}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Open localhost:${port} in a new tab`}
+            aria-label={`Open published port ${port} in a new tab`}
+          >
+            <span>{port}</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ServiceActionGroup({ serviceName, state, action, onExecute, onOpenCommands }: { serviceName: string; state?: string; action: ServiceActionState; onExecute: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {

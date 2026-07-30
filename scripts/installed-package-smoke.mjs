@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
+import { log } from 'node:console';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import process from 'node:process';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
@@ -29,4 +31,4 @@ if (!version.stdout.trim().startsWith('0.2.2')) throw new Error(`Unexpected inst
 if (projects.length !== 1 || projects[0].services[0] !== 'api') throw new Error(`Installed scan failed: ${scan.stdout}`);
 if (basename(projects[0].composeFilePath) !== 'compose.yaml') throw new Error('Installed CLI returned an unexpected Compose path.');
 
-console.log(`Installed package smoke passed on ${process.platform}: ${version.stdout.trim()}`);
+log(`Installed package smoke passed on ${process.platform}: ${version.stdout.trim()}`);

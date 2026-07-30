@@ -10,45 +10,12 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, reopened, synchronize, ready_for_review]
-  issue_comment:
-    types: [created]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  implement-pr48:
-    if: ${{ github.event_name == 'issue_comment' && github.event.issue.number == 48 && github.event.comment.body == '/run-pr48' && github.actor != 'github-actions[bot]' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v5
-        with:
-          ref: fix/manual-refresh-published-ports
-          fetch-depth: 0
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.x
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Apply implementation
-        run: python scripts/implement-pr48.py
-      - name: Install dependencies
-        run: npm ci
-      - name: Validate implementation
-        run: npm run validate
-      - name: Commit implementation
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "fix: show published local ports and default to manual refresh"
-          git push origin HEAD:fix/manual-refresh-published-ports
-
   validate:
-    if: ${{ github.event_name != 'issue_comment' }}
     name: Validate
     runs-on: ubuntu-latest
 

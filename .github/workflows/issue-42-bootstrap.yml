@@ -1,0 +1,47 @@
+name: Issue 42 bootstrap
+
+on:
+  push:
+    branches:
+      - agent/ui-compose-service-editing
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: agent/ui-compose-service-editing
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Apply issue 42 implementation
+        run: python3 scripts/apply-issue-42.py
+
+      - name: Remove bootstrap files
+        run: rm scripts/apply-issue-42.py .github/workflows/issue-42-bootstrap.yml
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate
+        run: npm run validate
+
+      - name: Commit generated implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add guided Compose service editing UI"
+          git push origin HEAD:agent/ui-compose-service-editing

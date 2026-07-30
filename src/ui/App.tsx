@@ -108,7 +108,7 @@ export function App({ token }: AppProps) {
     [runtime, selectedProject, state],
   );
 
-  async function load() {
+  async function load(options: { resetSelection?: boolean } = {}) {
     setState((current) => ({ ...current, loading: true, error: undefined }));
 
     try {
@@ -120,7 +120,10 @@ export function App({ token }: AppProps) {
       ]);
 
       setState({ loading: false, health, doctor, workspaces, stacks });
-      setSelectedId((current) => currentProjectOrFirst(current, stacks.stacks));
+      setSelectedId((current) => currentProjectOrFirst(options.resetSelection === true ? undefined : current, stacks.stacks));
+      if (options.resetSelection === true) {
+        setRuntime({ loading: false });
+      }
     } catch (error) {
       setState({ loading: false, error: error instanceof Error ? error.message : 'Unable to load compose data.' });
     }
@@ -205,6 +208,7 @@ export function App({ token }: AppProps) {
       () => apiPost<WorkspaceListResult>(token, '/api/workspaces/current', { name }),
       `Workspace ${name} is now current.`,
       false,
+      true,
     );
   }
 
@@ -221,6 +225,7 @@ export function App({ token }: AppProps) {
     mutation: () => Promise<WorkspaceListResult>,
     successMessage: string,
     clearForm: boolean,
+    resetWorkspaceContext = false,
   ) {
     setWorkspaceForm((current) => ({ ...current, busy: true, error: undefined, message: undefined }));
 
@@ -235,9 +240,11 @@ export function App({ token }: AppProps) {
         message: successMessage,
       }));
       setWorkspaceRemovalName(undefined);
-      setSelectedId(undefined);
       clearCommandFeedback(setForm);
-      await load();
+      await load({ resetSelection: resetWorkspaceContext });
+      if (resetWorkspaceContext) {
+        setActiveView('stacks');
+      }
     } catch (error) {
       setWorkspaceForm((current) => ({
         ...current,

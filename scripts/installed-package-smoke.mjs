@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { log } from 'node:console';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
@@ -27,25 +27,15 @@ const packResult = JSON.parse(packOutput);
 const tarball = resolve(packRoot, packResult[0].filename);
 await exec(npmExecutable, ['install', '--prefix', installRoot, tarball], { ...npmOptions, cwd: root });
 
-const binary = windows
-  ? join(installRoot, 'node_modules', '.bin', 'compose.cmd')
-  : join(installRoot, 'node_modules', '.bin', 'compose');
+const installedPackageRoot = join(installRoot, 'node_modules', '@jc90100', 'compose');
+const installedCli = join(installedPackageRoot, 'dist', 'cli', 'index.js');
+const installedShim = join(installRoot, 'node_modules', '.bin', windows ? 'compose.cmd' : 'compose');
 
-async function runInstalled(args) {
-  if (!windows) {
-    return exec(binary, args, { cwd: root });
-  }
+await access(installedShim);
+await access(installedCli);
 
-  const command = `call "${binary}" ${args.map(quoteWindowsArgument).join(' ')}`;
-  return exec(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', command], { cwd: root });
-}
-
-function quoteWindowsArgument(value) {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
-const version = await runInstalled(['--version']);
-const scan = await runInstalled(['scan', stackRoot, '--json']);
+const version = await exec(process.execPath, [installedCli, '--version'], { cwd: root });
+const scan = await exec(process.execPath, [installedCli, 'scan', stackRoot, '--json'], { cwd: root });
 const projects = JSON.parse(scan.stdout);
 
 if (!version.stdout.trim().startsWith('0.2.2')) throw new Error(`Unexpected installed version: ${version.stdout}`);

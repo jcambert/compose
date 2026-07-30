@@ -1,9 +1,9 @@
 name: Issue 42 bootstrap
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/ui-compose-service-editing
+      - main
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ jobs:
     if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout implementation branch
         uses: actions/checkout@v5
         with:
           ref: agent/ui-compose-service-editing

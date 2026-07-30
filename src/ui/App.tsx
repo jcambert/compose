@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { ServicesView } from './ServicesView';
-import { createPublishedPortLink } from './service-runtime-ui';
+import { extractPublishedHostPorts } from './service-runtime-ui';
 import {
   apiDelete,
   apiGet,
@@ -80,7 +80,7 @@ export function App({ token }: AppProps) {
   const [state, setState] = useState<LoadState>({ loading: true });
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
-  const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(5000);
+  const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(0);
   const [serviceAction, setServiceAction] = useState<ServiceActionState>({ busy: false });
   const [stackSearch, setStackSearch] = useState('');
   const [stackSort, setStackSort] = useState<StackSortMode>('name');
@@ -1111,9 +1111,9 @@ function StackDetailPanel({
 }
 
 function ServicePortLinks({ ports }: { ports: string[] }) {
-  const links = ports.map((port) => ({ port, link: createPublishedPortLink(port) })).filter((entry) => entry.link !== undefined);
-  if (links.length === 0) return null;
-  return <div className="service-port-list" aria-label="Published service ports"><small>Published ports</small><div>{links.map(({ port, link }) => link === undefined ? null : <a key={port} className="service-port-link" href={link.href} target="_blank" rel="noreferrer" title={link.title}><span>{link.label}</span><span aria-hidden="true">↗</span></a>)}</div></div>;
+  const publishedPorts = extractPublishedHostPorts(ports);
+  if (publishedPorts.length === 0) return null;
+  return <div className="service-port-list" aria-label="Published local ports"><small>Published ports</small><div>{publishedPorts.map((port) => <span key={port} className="service-port-chip" title={`Published local port ${port}`}>{port}</span>)}</div></div>;
 }
 
 function ServiceActionGroup({ serviceName, state, action, onExecute, onOpenCommands }: { serviceName: string; state?: string; action: ServiceActionState; onExecute: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {

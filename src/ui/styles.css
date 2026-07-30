@@ -789,3 +789,6 @@ small {
 .service-action-feedback { display: block; padding-top: .25rem; font-weight: 700; }
 .service-action-feedback.success { color: #86efac; }
 .service-action-feedback.error { color: #fca5a5; }
+
+
+.service-port-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 3.2rem; padding: .38rem .55rem; border: 1px solid rgba(56,189,248,.3); border-radius: .55rem; background: rgba(14,116,144,.12); color: #7dd3fc; font-size: .76rem; font-weight: 700; font-variant-numeric: tabular-nums; }

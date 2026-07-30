@@ -17,10 +17,15 @@ await mkdir(packRoot, { recursive: true });
 await mkdir(stackRoot, { recursive: true });
 await writeFile(join(stackRoot, 'compose.yaml'), 'services:\n  api:\n    image: node:22-alpine\n', 'utf8');
 
-const { stdout: packOutput } = await exec(npmExecutable, ['pack', '--json', '--pack-destination', packRoot], { cwd: process.cwd() });
+const npmOptions = { shell: windows };
+const { stdout: packOutput } = await exec(
+  npmExecutable,
+  ['pack', '--json', '--pack-destination', packRoot],
+  { ...npmOptions, cwd: process.cwd() },
+);
 const packResult = JSON.parse(packOutput);
 const tarball = resolve(packRoot, packResult[0].filename);
-await exec(npmExecutable, ['install', '--prefix', installRoot, tarball], { cwd: root });
+await exec(npmExecutable, ['install', '--prefix', installRoot, tarball], { ...npmOptions, cwd: root });
 
 const binary = windows
   ? join(installRoot, 'node_modules', '.bin', 'compose.cmd')

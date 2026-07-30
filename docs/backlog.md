@@ -254,3 +254,7 @@ Every backlog item is complete only when:
 - Related docs are updated.
 - CI is green.
 - The PR is reviewed before merge.
+
+## Completed: guided Compose service editing (#42)
+
+The local React UI now exposes the #41 editing engine through stack-scoped endpoints and guided create, update and delete workflows. Every mutation requires a generated YAML diff and explicit confirmation before disk write. Complex fixture hardening remains tracked as #43.

@@ -310,3 +310,12 @@ A GUI task should be rejected or postponed when it requires:
 - Desktop packaging before the local server proves valuable.
 - Remote server behaviour without an explicit security design.
 - Replacing Docker Compose semantics with an incompatible abstraction.
+
+## Compose service editing status
+
+- [x] Shared Compose editing application service.
+- [x] Token-protected stack service endpoints.
+- [x] Guided browser forms for create, update and delete.
+- [x] YAML diff preview and explicit save confirmation.
+- [x] Optimistic file-change protection and advanced key preservation.
+- [ ] Additional complex-file fixtures and UI-focused regression coverage (#43).

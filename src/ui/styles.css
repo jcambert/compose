@@ -743,3 +743,17 @@ small {
     width: 100%;
   }
 }
+
+.service-editor-grid { align-items: start; }
+.service-mode-tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.service-mode-tabs .active { border-color: var(--accent, #60a5fa); box-shadow: 0 0 0 1px var(--accent, #60a5fa); }
+.compose-service-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; margin: 1rem 0; }
+.compose-service-form label { min-width: 0; }
+.compose-service-form textarea { min-height: 5.5rem; resize: vertical; }
+.preview-panel { min-height: 34rem; }
+.yaml-diff { max-height: 34rem; overflow: auto; white-space: pre; padding: 1rem; border-radius: .75rem; background: #07111f; color: #dbeafe; font-size: .78rem; line-height: 1.45; }
+.confirm-row { display: flex; flex-direction: row; align-items: center; gap: .6rem; margin: 1rem 0; }
+.confirm-row input { width: auto; }
+.preserved-keys { display: flex; flex-direction: column; gap: .25rem; margin: .75rem 0; padding: .75rem; border: 1px solid rgba(148,163,184,.2); border-radius: .75rem; }
+.danger-zone { margin: 1rem 0; padding: 1rem; border: 1px solid rgba(248,113,113,.45); border-radius: .75rem; background: rgba(127,29,29,.16); }
+@media (max-width: 860px) { .compose-service-form { grid-template-columns: 1fr; } }

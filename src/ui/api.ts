@@ -123,3 +123,60 @@ async function api<T>(token: string, path: string, options: RequestInit = {}): P
 
   return value as T;
 }
+
+export type ComposeEnvironmentEntry = {
+  name: string;
+  value: string;
+};
+
+export type ComposeServiceForm = {
+  name: string;
+  image?: string;
+  build?: string;
+  ports?: string[];
+  environment?: ComposeEnvironmentEntry[];
+  volumes?: string[];
+  dependsOn?: string[];
+  command?: string;
+  restart?: string;
+};
+
+export type EditableComposeService = {
+  name: string;
+  image?: string;
+  build?: string | Record<string, unknown>;
+  ports: string[];
+  environment: ComposeEnvironmentEntry[];
+  volumes: string[];
+  dependsOn: string[];
+  command?: string | string[];
+  restart?: string;
+  readOnlyKeys: string[];
+  preservedKeys: string[];
+};
+
+export type ComposeServiceListResult = {
+  composeFilePath: string;
+  contentHash: string;
+  services: EditableComposeService[];
+};
+
+export type ComposeServiceMutationPreview = {
+  operation: 'create' | 'update' | 'delete';
+  composeFilePath: string;
+  serviceName: string;
+  originalContentHash: string;
+  beforeYaml?: string;
+  afterYaml?: string;
+  diff: string;
+  nextContent: string;
+  validation: { success: true; errors: [] };
+  warnings: string[];
+};
+
+export type ComposeServiceMutationCommitResult = {
+  composeFilePath: string;
+  operation: 'create' | 'update' | 'delete';
+  serviceName: string;
+  contentHash: string;
+};

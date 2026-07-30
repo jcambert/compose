@@ -258,3 +258,13 @@ Current constraints:
 ## Next step
 
 The next project step is preparing the post-`v0.2.0` release, likely `v0.2.1`.
+
+## Guided service editing
+
+The local UI exposes stack-scoped, token-protected endpoints:
+
+- `GET /api/stacks/{stackId}/services`
+- `POST /api/stacks/{stackId}/services/preview`
+- `POST /api/stacks/{stackId}/services/commit`
+
+The browser editor supports guided create, update and delete operations. It never writes immediately: the user first generates and reviews a YAML diff, explicitly confirms it, and only then commits. The application service content hash prevents saving a stale preview after the file changed on disk. Advanced and unsupported service keys are preserved.

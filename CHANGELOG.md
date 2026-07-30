@@ -10,6 +10,8 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+- Fixed workspace activation so Use reloads stacks, resets the selected stack and runtime, and opens the refreshed stack view.
+
 - Changed runtime refresh to Manual by default and display every unique published local port without assuming an HTTP endpoint.
 
 - Added direct service actions, per-service feedback and configurable runtime auto-refresh with a 5-second default.

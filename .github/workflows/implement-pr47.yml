@@ -1,0 +1,32 @@
+name: Implement PR 47 runtime controls
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: ${{ github.event.pull_request.number == 47 && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/direct-service-actions-auto-refresh
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: python scripts/implement-pr47.py
+      - run: npm ci
+      - run: npm run validate
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: add direct service actions and auto refresh"
+          git push origin HEAD:fix/direct-service-actions-auto-refresh

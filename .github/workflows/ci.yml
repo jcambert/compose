@@ -31,7 +31,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Apply implementation
-        run: python scripts/implement-pr45.py
+        run: python scripts/implement-pr45-fixed.py
       - name: Install dependencies
         run: npm ci
       - name: Validate implementation

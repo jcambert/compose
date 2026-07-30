@@ -27,10 +27,12 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Apply issue 42 implementation
-        run: python3 scripts/apply-issue-42.py
+        run: |
+          python3 scripts/apply-issue-42.py
+          python3 scripts/fix-issue-42.py
 
       - name: Remove bootstrap files
-        run: rm scripts/apply-issue-42.py .github/workflows/issue-42-bootstrap.yml
+        run: rm scripts/apply-issue-42.py scripts/fix-issue-42.py .github/workflows/issue-42-bootstrap.yml
 
       - name: Install dependencies
         run: npm ci

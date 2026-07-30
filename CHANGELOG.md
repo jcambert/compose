@@ -10,6 +10,8 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+- Added direct service actions, per-service feedback and configurable runtime auto-refresh with a 5-second default.
+
 ### Added
 
 - Documented the simplified Compose YAML editing design, including guided service forms, targeted YAML mutations, diff preview, validation, safety rules and delivery slicing.

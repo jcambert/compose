@@ -779,3 +779,13 @@ small {
 .service-port-link { display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; padding: .38rem .55rem; border: 1px solid rgba(56,189,248,.3); border-radius: .55rem; background: rgba(14,116,144,.12); color: #7dd3fc; font-size: .76rem; font-weight: 700; text-decoration: none; }
 .service-port-link:hover { border-color: rgba(125,211,252,.65); background: rgba(14,116,144,.22); color: #e0f2fe; }
 @media (min-width: 1160px) { .service-card-header { display: flex; } }
+
+
+.status-line { margin-bottom: 1rem; }
+.runtime-refresh-controls { align-items: end; flex-wrap: wrap; }
+.refresh-interval-control { display: grid; gap: .25rem; min-width: 7rem; }
+.refresh-interval-control span { color: var(--muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.refresh-interval-control select { min-height: 2.5rem; }
+.service-action-feedback { display: block; padding-top: .25rem; font-weight: 700; }
+.service-action-feedback.success { color: #86efac; }
+.service-action-feedback.error { color: #fca5a5; }

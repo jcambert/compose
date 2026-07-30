@@ -23,6 +23,8 @@ type AppProps = {
 
 type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'services' | 'doctor' | 'commands';
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
+type RefreshInterval = 0 | 5000 | 10000 | 30000 | 60000;
+type ServiceActionState = { serviceName?: string; command?: string; busy: boolean; message?: string; error?: string };
 type Tone = 'ok' | 'warning' | 'danger';
 
 type LoadState = {
@@ -78,6 +80,8 @@ export function App({ token }: AppProps) {
   const [state, setState] = useState<LoadState>({ loading: true });
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
+  const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(5000);
+  const [serviceAction, setServiceAction] = useState<ServiceActionState>({ busy: false });
   const [stackSearch, setStackSearch] = useState('');
   const [stackSort, setStackSort] = useState<StackSortMode>('name');
   const [workspaceForm, setWorkspaceForm] = useState<WorkspaceFormState>({ name: '', path: '', busy: false });
@@ -138,9 +142,28 @@ export function App({ token }: AppProps) {
     }
   }
 
-  function prepareServiceCommand(command: string, serviceName: string) {
-    setForm({ command, serviceName, confirmed: false, destructiveConfirmed: false, busy: false });
-    setActiveView('commands');
+  async function executeServiceCommand(command: string, serviceName: string) {
+    if (selectedProject === undefined || serviceAction.busy) return;
+
+    setServiceAction({ serviceName, command, busy: true });
+    try {
+      const request: CommandRequest = {
+        command,
+        composeFilePath: selectedProject.composeFilePath,
+        services: [serviceName],
+        options: {},
+        confirmed: true,
+        destructiveConfirmed: destructiveCommands.has(command),
+      };
+      const result = await apiPost<ComposeExecutionResult>(token, '/api/commands/execute', request);
+      if (result.exitCode !== 0) {
+        throw new Error(result.stderr || `Command exited with code ${result.exitCode}.`);
+      }
+      setServiceAction({ serviceName, command, busy: false, message: `${command} completed.` });
+      await refreshRuntime(selectedProject);
+    } catch (error) {
+      setServiceAction({ serviceName, command, busy: false, error: error instanceof Error ? error.message : 'Unable to execute service command.' });
+    }
   }
 
   async function saveWorkspaceFromUi() {
@@ -282,6 +305,14 @@ export function App({ token }: AppProps) {
     void refreshRuntime(selectedProject);
   }, [selectedProject, token]);
 
+  useEffect(() => {
+    if (activeView !== 'stacks' || selectedProject === undefined || refreshInterval === 0) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshRuntime(selectedProject);
+    }, refreshInterval);
+    return () => window.clearInterval(timer);
+  }, [activeView, refreshInterval, selectedProject, token]);
+
   const destructive = destructiveCommands.has(form.command);
   const canExecute = form.preview !== undefined && form.confirmed && (!destructive || form.destructiveConfirmed);
 
@@ -343,7 +374,10 @@ export function App({ token }: AppProps) {
               clearCommandFeedback(setForm);
             }}
             onOpenCommands={() => setActiveView('commands')}
-            onPrepareServiceCommand={prepareServiceCommand}
+            serviceAction={serviceAction}
+            refreshInterval={refreshInterval}
+            onRefreshIntervalChange={setRefreshInterval}
+            onExecuteServiceCommand={(command, serviceName) => void executeServiceCommand(command, serviceName)}
             onRefreshRuntime={() => void refreshRuntime()}
           />
         ) : null}
@@ -676,7 +710,10 @@ function StacksView({
   setSort,
   onSelect,
   onOpenCommands,
-  onPrepareServiceCommand,
+  serviceAction,
+  refreshInterval,
+  onRefreshIntervalChange,
+  onExecuteServiceCommand,
   onRefreshRuntime,
 }: {
   stacks?: StackListResult;
@@ -690,7 +727,10 @@ function StacksView({
   setSort: (value: StackSortMode) => void;
   onSelect: (id: string) => void;
   onOpenCommands: () => void;
-  onPrepareServiceCommand: (command: string, serviceName: string) => void;
+  serviceAction: ServiceActionState;
+  refreshInterval: RefreshInterval;
+  onRefreshIntervalChange: (value: RefreshInterval) => void;
+  onExecuteServiceCommand: (command: string, serviceName: string) => void;
   onRefreshRuntime: () => void;
 }) {
   return (
@@ -733,7 +773,7 @@ function StacksView({
               ))
             )}
           </div>
-          <StackDetailPanel project={selectedProject} runtime={runtime} onOpenCommands={onOpenCommands} onPrepareServiceCommand={onPrepareServiceCommand} onRefreshRuntime={onRefreshRuntime} />
+          <StackDetailPanel project={selectedProject} runtime={runtime} serviceAction={serviceAction} refreshInterval={refreshInterval} onRefreshIntervalChange={onRefreshIntervalChange} onExecuteServiceCommand={onExecuteServiceCommand} onOpenCommands={onOpenCommands} onRefreshRuntime={onRefreshRuntime} />
         </div>
       </Panel>
     </div>
@@ -977,14 +1017,20 @@ function StackCard({
 function StackDetailPanel({
   project,
   runtime,
+  serviceAction,
+  refreshInterval,
+  onRefreshIntervalChange,
+  onExecuteServiceCommand,
   onOpenCommands,
-  onPrepareServiceCommand,
   onRefreshRuntime,
 }: {
   project?: DiscoveredComposeProject;
   runtime: RuntimeState;
+  serviceAction: ServiceActionState;
+  refreshInterval: RefreshInterval;
+  onRefreshIntervalChange: (value: RefreshInterval) => void;
+  onExecuteServiceCommand: (command: string, serviceName: string) => void;
   onOpenCommands: () => void;
-  onPrepareServiceCommand: (command: string, serviceName: string) => void;
   onRefreshRuntime: () => void;
 }) {
   const services = project?.services ?? [];
@@ -1002,8 +1048,18 @@ function StackDetailPanel({
               <h2>{project.name}</h2>
               <span className="muted path-text">{project.composeFilePath}</span>
             </div>
-            <div className="detail-actions">
-              <button className="secondary" type="button" onClick={onRefreshRuntime} disabled={runtime.loading}>Refresh runtime</button>
+            <div className="detail-actions runtime-refresh-controls">
+              <button className="secondary" type="button" onClick={onRefreshRuntime} disabled={runtime.loading}>Refresh</button>
+              <label className="refresh-interval-control">
+                <span>Auto refresh</span>
+                <select value={refreshInterval} onChange={(event) => onRefreshIntervalChange(Number(event.target.value) as RefreshInterval)}>
+                  <option value={0}>Manual</option>
+                  <option value={5000}>5 sec</option>
+                  <option value={10000}>10 sec</option>
+                  <option value={30000}>30 sec</option>
+                  <option value={60000}>1 min</option>
+                </select>
+              </label>
               <button type="button" onClick={onOpenCommands}>Prepare command</button>
             </div>
           </div>
@@ -1032,7 +1088,7 @@ function StackDetailPanel({
                         <strong className="service-name" title={service}>{service}</strong>
                         <StatusPill tone={toneForServiceState(serviceStatus?.state)}>{serviceStatus?.state ?? 'unknown'}</StatusPill>
                       </div>
-                      <ServiceActionGroup serviceName={service} state={serviceStatus?.state} onPrepare={onPrepareServiceCommand} onOpenCommands={onOpenCommands} />
+                      <ServiceActionGroup serviceName={service} state={serviceStatus?.state} action={serviceAction} onExecute={onExecuteServiceCommand} onOpenCommands={onOpenCommands} />
                     </div>
                     {containerCount > 0 ? (
                       <div className="service-runtime-meta">
@@ -1041,6 +1097,8 @@ function StackDetailPanel({
                       </div>
                     ) : null}
                     {ports.length > 0 ? <ServicePortLinks ports={ports} /> : null}
+                    {serviceAction.serviceName === service && serviceAction.message !== undefined ? <small className="service-action-feedback success">{serviceAction.message}</small> : null}
+                    {serviceAction.serviceName === service && serviceAction.error !== undefined ? <small className="service-action-feedback error">{serviceAction.error}</small> : null}
                   </article>
                 );
               })
@@ -1058,14 +1116,15 @@ function ServicePortLinks({ ports }: { ports: string[] }) {
   return <div className="service-port-list" aria-label="Published service ports"><small>Published ports</small><div>{links.map(({ port, link }) => link === undefined ? null : <a key={port} className="service-port-link" href={link.href} target="_blank" rel="noreferrer" title={link.title}><span>{link.label}</span><span aria-hidden="true">↗</span></a>)}</div></div>;
 }
 
-function ServiceActionGroup({ serviceName, state, onPrepare, onOpenCommands }: { serviceName: string; state?: string; onPrepare: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {
+function ServiceActionGroup({ serviceName, state, action, onExecute, onOpenCommands }: { serviceName: string; state?: string; action: ServiceActionState; onExecute: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {
   const running = state?.toLowerCase().includes('running') === true;
+  const busy = action.busy && action.serviceName === serviceName;
   return <div className="service-action-group" role="group" aria-label={`Actions for ${serviceName}`}>
-    <ServiceActionButton label="Start" icon="▶" disabled={running} onClick={() => onPrepare('start', serviceName)} />
-    <ServiceActionButton label="Restart" icon="↻" disabled={!running} onClick={() => onPrepare('restart', serviceName)} />
-    <ServiceActionButton label="Stop" icon="■" disabled={!running} onClick={() => onPrepare('stop', serviceName)} />
-    <ServiceActionButton label="Logs" icon="≡" onClick={() => onPrepare('logs', serviceName)} />
-    <ServiceActionButton label="More commands" icon="⋮" onClick={onOpenCommands} />
+    <ServiceActionButton label="Start" icon="▶" disabled={running || busy} onClick={() => onExecute('start', serviceName)} />
+    <ServiceActionButton label="Restart" icon="↻" disabled={!running || busy} onClick={() => onExecute('restart', serviceName)} />
+    <ServiceActionButton label="Stop" icon="■" disabled={!running || busy} onClick={() => onExecute('stop', serviceName)} />
+    <ServiceActionButton label="Logs" icon="≡" disabled={busy} onClick={() => onExecute('logs', serviceName)} />
+    <ServiceActionButton label="More commands" icon="⋮" disabled={busy} onClick={onOpenCommands} />
   </div>;
 }
 

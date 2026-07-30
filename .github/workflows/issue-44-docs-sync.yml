@@ -1,0 +1,65 @@
+name: Issue 44 docs sync
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    if: ${{ github.event.pull_request.number == 44 && github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/windows-real-stack-hardening
+          fetch-depth: 0
+      - name: Update changelog and backlog numbering
+        shell: python
+        run: |
+          from pathlib import Path
+
+          backlog = Path('docs/backlog.md')
+          text = backlog.read_text(encoding='utf-8')
+          old_order = '''#39 release: prepare v0.2.2
+          #40 docs: design simplified Compose YAML editing (completed)
+          #41 feat: add Compose document editing service
+          #42 feat: expose guided service editing in local UI
+          #43 test: validate installed CLI and UI editing on Windows with real Docker stacks'''
+          new_order = '''#39 release: prepare v0.2.2
+          #40 docs: design simplified Compose YAML editing (completed)
+          #41 feat: add Compose document editing service (completed)
+          #43 feat: expose guided service editing in local UI (completed)
+          #44 test: validate installed CLI and UI editing on Windows with real Docker stacks (completed)'''
+          text = text.replace(old_order, new_order)
+          text = text.replace('## Completed: guided Compose service editing (#42)', '## Completed: guided Compose service editing (#43)')
+          text = text.replace('Complex fixture hardening remains tracked as #43.', 'Windows, installed-package and complex fixture hardening is completed in PR #44.')
+          if '## Completed: Windows and real-stack hardening (#44)' not in text:
+              text += '''
+
+          ## Completed: Windows and real-stack hardening (#44)
+
+          The installed npm package is exercised from an isolated prefix on Windows-compatible paths. Realistic fixtures verify that guided mutations preserve advanced Compose sections, handle LF and CRLF input, and reject stale previews. A dedicated Windows GitHub Actions workflow validates the editing flow, build, smoke test and installed package.
+          '''
+          backlog.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          anchor = '- Added a Compose service YAML mutation layer that preserves unsupported service keys and top-level Compose sections while exposing a guided editable service model.\n'
+          additions = '''- Added Windows CI validation for guided Compose editing, build, smoke testing and installed-package execution.
+          - Added an isolated npm package installation smoke test that supports Windows command shims and paths containing spaces.
+          - Added realistic Compose fixtures covering anchors, extension fields, health checks, deploy settings, networks, secrets, configs, LF/CRLF input and stale previews.
+          '''
+          if 'Added Windows CI validation for guided Compose editing' not in text:
+              text = text.replace(anchor, anchor + additions)
+          changelog.write_text(text, encoding='utf-8')
+      - name: Commit tracking documentation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md docs/backlog.md
+          git commit -m "docs: complete PR 44 tracking"
+          git push origin HEAD:agent/windows-real-stack-hardening

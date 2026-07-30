@@ -7,6 +7,8 @@ import process from 'node:process';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
+const windows = process.platform === 'win32';
+const npmExecutable = windows ? 'npm.cmd' : 'npm';
 const root = await mkdtemp(join(tmpdir(), 'compose-installed-smoke-'));
 const packRoot = join(root, 'pack');
 const installRoot = join(root, 'install');
@@ -15,16 +17,17 @@ await mkdir(packRoot, { recursive: true });
 await mkdir(stackRoot, { recursive: true });
 await writeFile(join(stackRoot, 'compose.yaml'), 'services:\n  api:\n    image: node:22-alpine\n', 'utf8');
 
-const { stdout: packOutput } = await exec('npm', ['pack', '--json', '--pack-destination', packRoot], { cwd: process.cwd() });
+const { stdout: packOutput } = await exec(npmExecutable, ['pack', '--json', '--pack-destination', packRoot], { cwd: process.cwd() });
 const packResult = JSON.parse(packOutput);
 const tarball = resolve(packRoot, packResult[0].filename);
-await exec('npm', ['install', '--prefix', installRoot, tarball], { cwd: root });
+await exec(npmExecutable, ['install', '--prefix', installRoot, tarball], { cwd: root });
 
-const binary = process.platform === 'win32'
+const binary = windows
   ? join(installRoot, 'node_modules', '.bin', 'compose.cmd')
   : join(installRoot, 'node_modules', '.bin', 'compose');
-const version = await exec(binary, ['--version'], { cwd: root });
-const scan = await exec(binary, ['scan', stackRoot, '--json'], { cwd: root });
+const executionOptions = { cwd: root, shell: windows };
+const version = await exec(binary, ['--version'], executionOptions);
+const scan = await exec(binary, ['scan', stackRoot, '--json'], executionOptions);
 const projects = JSON.parse(scan.stdout);
 
 if (!version.stdout.trim().startsWith('0.2.2')) throw new Error(`Unexpected installed version: ${version.stdout}`);

@@ -11,13 +11,15 @@ on:
     branches:
       - main
     types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
 
 jobs:
   implement-pr48:
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 48 && github.actor != 'github-actions[bot]' }}
+    if: ${{ github.event_name == 'issue_comment' && github.event.issue.number == 48 && github.event.comment.body == '/run-pr48' && github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout feature branch
@@ -46,6 +48,7 @@ jobs:
           git push origin HEAD:fix/manual-refresh-published-ports
 
   validate:
+    if: ${{ github.event_name != 'issue_comment' }}
     name: Validate
     runs-on: ubuntu-latest
 

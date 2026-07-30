@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { createPublishedPortLink } from '../../src/ui/service-runtime-ui';
+import { extractPublishedHostPort, extractPublishedHostPorts } from '../../src/ui/service-runtime-ui';
 
-describe('service runtime UI port links', () => {
+describe('service runtime UI published ports', () => {
   it.each([
-    ['0.0.0.0:3000->3000/tcp', 'http://localhost:3000', 'localhost:3000 → 3000'],
-    ['[::]:8443->443/tcp', 'https://localhost:8443', 'localhost:8443 → 443'],
-    ['127.0.0.1:8080->80/tcp', 'http://127.0.0.1:8080', '127.0.0.1:8080 → 80'],
-    ['localhost:5173', 'http://localhost:5173', 'localhost:5173'],
-  ])('creates a browser endpoint for %s', (value, href, label) => expect(createPublishedPortLink(value)).toMatchObject({ href, label }));
-  it('ignores non-published descriptions', () => { expect(createPublishedPortLink('3000/tcp')).toBeUndefined(); expect(createPublishedPortLink('')).toBeUndefined(); });
+    ['0.0.0.0:3000->3000/tcp', 3000],
+    ['[::]:8443->443/tcp', 8443],
+    ['127.0.0.1:8080->80/tcp', 8080],
+    ['localhost:5173', 5173],
+  ])('extracts the local published port from %s', (value, expected) => {
+    expect(extractPublishedHostPort(value)).toBe(expected);
+  });
+
+  it('returns all unique local ports from Docker output', () => {
+    expect(extractPublishedHostPorts([
+      '0.0.0.0:6832->12345/tcp, [::]:6832->12345/tcp',
+      '0.0.0.0:3100->3100/tcp',
+      '127.0.0.1:9095->9095/tcp',
+    ])).toEqual([3100, 6832, 9095]);
+  });
+
+  it('ignores internal-only and invalid ports', () => {
+    expect(extractPublishedHostPort('3000/tcp')).toBeUndefined();
+    expect(extractPublishedHostPort('')).toBeUndefined();
+    expect(extractPublishedHostPort('0.0.0.0:70000->80/tcp')).toBeUndefined();
+  });
 });

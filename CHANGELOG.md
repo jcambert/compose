@@ -10,6 +10,8 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+- Changed runtime refresh to Manual by default and display every unique published local port without assuming an HTTP endpoint.
+
 - Added direct service actions, per-service feedback and configurable runtime auto-refresh with a 5-second default.
 
 ### Added

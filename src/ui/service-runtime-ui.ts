@@ -1,32 +1,32 @@
-export type PublishedPortLink = { href: string; label: string; title: string };
+export function extractPublishedHostPorts(values: string[]): number[] {
+  const ports = new Set<number>();
 
-export function createPublishedPortLink(value: string): PublishedPortLink | undefined {
+  for (const value of values) {
+    for (const segment of value.split(',')) {
+      const port = extractPublishedHostPort(segment);
+      if (port !== undefined) ports.add(port);
+    }
+  }
+
+  return [...ports].sort((left, right) => left - right);
+}
+
+export function extractPublishedHostPort(value: string): number | undefined {
   const normalized = value.trim();
   if (normalized.length === 0) return undefined;
+
   const arrow = normalized.indexOf('->');
   if (arrow < 0 && !normalized.includes(':')) return undefined;
-  const publishedPart = arrow < 0 ? normalized : normalized.slice(0, arrow);
-  const targetPart = arrow < 0 ? undefined : normalized.slice(arrow + 2);
-  const published = parseHostAndPort(publishedPart.replace(/\/(tcp|udp)$/i, ''));
-  if (published === undefined) return undefined;
-  const targetPort = targetPart?.match(/(\d+)(?:\/(tcp|udp))?$/i)?.[1];
-  const protocol = published.port === 443 || published.port === 8443 || targetPort === '443' ? 'https' : 'http';
-  const host = normalizeBrowserHost(published.host);
-  return { href: `${protocol}://${formatUrlHost(host)}:${published.port}`, label: `${host}:${published.port}${targetPort === undefined ? '' : ` → ${targetPort}`}`, title: `Open ${protocol.toUpperCase()} endpoint for ${normalized}` };
-}
 
-function parseHostAndPort(value: string): { host: string; port: number } | undefined {
-  const bracketed = /^\[([^\]]+)\]:(\d+)$/.exec(value);
-  if (bracketed?.[1] !== undefined && bracketed[2] !== undefined) return { host: bracketed[1], port: Number(bracketed[2]) };
-  const segments = value.split(':');
-  const portValue = segments.pop();
-  if (portValue === undefined || !/^\d+$/.test(portValue)) return undefined;
-  return { host: segments.join(':') || 'localhost', port: Number(portValue) };
-}
+  const publishedPart = (arrow < 0 ? normalized : normalized.slice(0, arrow))
+    .replace(/\/(tcp|udp)$/i, '')
+    .trim();
+  const bracketed = /^\[[^\]]+\]:(\d+)$/.exec(publishedPart);
+  const plain = /(?:^|:)(\d+)$/.exec(publishedPart);
+  const portValue = bracketed?.[1] ?? plain?.[1];
 
-function normalizeBrowserHost(host: string): string {
-  const normalized = host.trim().toLowerCase();
-  return normalized === '' || normalized === '0.0.0.0' || normalized == '::' || normalized === '[::]' || normalized === '*' ? 'localhost' : host;
-}
+  if (portValue === undefined) return undefined;
 
-function formatUrlHost(host: string): string { return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host; }
+  const port = Number(portValue);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : undefined;
+}

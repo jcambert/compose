@@ -1,0 +1,40 @@
+name: Implement issue 42 from PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Extract and apply implementation
+        shell: bash
+        run: |
+          sed -n "/python - <<'PY'/,/^          PY$/p" .github/workflows/implement-42.yml \
+            | sed '1d;$d;s/^          //' > /tmp/implement-42.py
+          python /tmp/implement-42.py
+      - run: npm ci
+      - run: npm run validate
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: add guided Compose service editing UI"
+          git push origin HEAD:${{ github.head_ref }}

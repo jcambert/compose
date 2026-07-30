@@ -240,9 +240,9 @@ Acceptance criteria for future reconsideration:
 ```text
 #39 release: prepare v0.2.2
 #40 docs: design simplified Compose YAML editing (completed)
-#41 feat: add Compose document editing service
-#42 feat: expose guided service editing in local UI
-#43 test: validate installed CLI and UI editing on Windows with real Docker stacks
+#41 feat: add Compose document editing service (completed)
+#43 feat: expose guided service editing in local UI (completed)
+#44 test: validate installed CLI and UI editing on Windows with real Docker stacks (completed)
 ```
 
 ## Definition of done
@@ -255,6 +255,11 @@ Every backlog item is complete only when:
 - CI is green.
 - The PR is reviewed before merge.
 
-## Completed: guided Compose service editing (#42)
+## Completed: guided Compose service editing (#43)
 
-The local React UI now exposes the #41 editing engine through stack-scoped endpoints and guided create, update and delete workflows. Every mutation requires a generated YAML diff and explicit confirmation before disk write. Complex fixture hardening remains tracked as #43.
+The local React UI now exposes the #41 editing engine through stack-scoped endpoints and guided create, update and delete workflows. Every mutation requires a generated YAML diff and explicit confirmation before disk write. Windows, installed-package and complex fixture hardening is completed in PR #44.
+
+
+## Completed: Windows and real-stack hardening (#44)
+
+The installed npm package is exercised from an isolated prefix on Windows-compatible paths. Realistic fixtures verify that guided mutations preserve advanced Compose sections, handle LF and CRLF input, and reject stale previews. A dedicated Windows GitHub Actions workflow validates the editing flow, build, smoke test and installed package.

@@ -29,6 +29,7 @@
     "start": "node dist/cli/index.js",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
+    "test:installed": "npm run build && node scripts/installed-package-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "audit": "npm audit --audit-level=moderate",
     "smoke": "node scripts/smoke-test.mjs",

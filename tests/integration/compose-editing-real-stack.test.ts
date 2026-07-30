@@ -40,10 +40,11 @@ describe('realistic Compose editing workflow', () => {
     });
 
     expect(preview.warnings).toEqual(expect.arrayContaining([
+      'Service key preserved by the guided editor: <<',
+      'Service key preserved by the guided editor: configs',
       'Service key preserved by the guided editor: deploy',
       'Service key preserved by the guided editor: healthcheck',
-      'Service key preserved by the guided editor: labels',
-      'Service key preserved by the guided editor: networks',
+      'Service key preserved by the guided editor: secrets',
     ]));
 
     await commitComposeServiceMutation({ preview });

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { log } from 'node:console';
-import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
@@ -17,6 +17,8 @@ await mkdir(packRoot, { recursive: true });
 await mkdir(stackRoot, { recursive: true });
 await writeFile(join(stackRoot, 'compose.yaml'), 'services:\n  api:\n    image: node:22-alpine\n', 'utf8');
 
+const packageMetadata = JSON.parse(await readFile(resolve('package.json'), 'utf8'));
+const expectedVersion = packageMetadata.version;
 const npmOptions = { shell: windows };
 const { stdout: packOutput } = await exec(
   npmExecutable,
@@ -38,7 +40,7 @@ const version = await exec(process.execPath, [installedCli, '--version'], { cwd:
 const scan = await exec(process.execPath, [installedCli, 'scan', stackRoot, '--json'], { cwd: root });
 const projects = JSON.parse(scan.stdout);
 
-if (!version.stdout.trim().startsWith('0.2.2')) throw new Error(`Unexpected installed version: ${version.stdout}`);
+if (version.stdout.trim() !== expectedVersion) throw new Error(`Unexpected installed version: expected ${expectedVersion}, got ${version.stdout.trim()}`);
 if (projects.length !== 1 || projects[0].services[0] !== 'api') throw new Error(`Installed scan failed: ${scan.stdout}`);
 if (basename(projects[0].composeFilePath) !== 'compose.yaml') throw new Error('Installed CLI returned an unexpected Compose path.');
 

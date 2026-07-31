@@ -1,9 +1,3 @@
-- Add direct stack-level actions to the Stacks list and compact the manual/automatic runtime refresh control.
-
-- Make every published service port clickable from the Stacks page, opening `http://localhost:<port>` in a new browser tab.
-
-- Honor `compose ui --workspace <name>` by activating that workspace before the local UI server starts; without the option, the last active workspace remains in use.
-
 # Changelog
 
 All notable changes to this project are documented here.
@@ -16,22 +10,33 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
-- Fixed workspace activation so Use reloads stacks, resets the selected stack and runtime, and opens the refreshed stack view.
-
-- Changed runtime refresh to Manual by default and display every unique published local port without assuming an HTTP endpoint.
-
-- Added direct service actions, per-service feedback and configurable runtime auto-refresh with a 5-second default.
+## 0.3.0 - Guided Compose editing and professional local administration
 
 ### Added
 
-- Documented the simplified Compose YAML editing design, including guided service forms, targeted YAML mutations, diff preview, validation, safety rules and delivery slicing.
-- Added a shared Compose editing application service for listing services, previewing create/update/delete mutations and committing validated changes with optimistic file-change protection.
-- Added a Compose service YAML mutation layer that preserves unsupported service keys and top-level Compose sections while exposing a guided editable service model.
-- Added Windows CI validation for guided Compose editing, build, smoke testing and installed-package execution.
-- Added an isolated npm package installation smoke test that supports Windows command shims and paths containing spaces.
-- Added realistic Compose fixtures covering anchors, extension fields, health checks, deploy settings, networks, secrets, configs, LF/CRLF input and stale previews.
-- Added professional runtime service cards with safe command shortcuts and clickable published-port endpoints.
-- Fixed compact service card layout and removed irrelevant empty runtime details for stopped services.
+- Guided browser workflows to create, update and remove Compose services with YAML diff preview and explicit confirmation.
+- Targeted YAML editing that preserves unsupported service keys and top-level Compose sections.
+- Direct Start, Restart, Stop, Logs and advanced actions for services and complete stacks.
+- Published local port controls that show every unique host port and open it in a new browser tab.
+- Manual and optional automatic runtime refresh controls.
+- Realistic Compose fixtures and Windows installed-package validation.
+
+### Changed
+
+- Workspace activation reloads stack discovery and clears stale selection and runtime data.
+- `compose ui --workspace <name>` takes precedence at startup and becomes the last opened workspace.
+- Browser API reads bypass caching to prevent stale stack lists after workspace switches.
+- Runtime cards hide irrelevant empty details and use a compact professional layout.
+
+### Fixed
+
+- Service-card title, spacing and action alignment issues.
+- Published-port parsing and IPv4/IPv6 deduplication.
+- Windows npm shim and paths-with-spaces execution issues.
+
+### Notes
+
+`0.3.0` is backward compatible. The CLI remains primary; `compose ui` remains optional, local-only and token-protected.
 
 ## 0.2.2 - Local UI polish and agent guidelines
 

@@ -25,6 +25,7 @@ type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'services' | 'doctor' | '
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
 type RefreshInterval = 0 | 5000 | 10000 | 30000 | 60000;
 type ServiceActionState = { serviceName?: string; command?: string; busy: boolean; message?: string; error?: string };
+type StackActionState = { projectId?: string; command?: string; busy: boolean; message?: string; error?: string };
 type Tone = 'ok' | 'warning' | 'danger';
 
 type LoadState = {
@@ -82,6 +83,7 @@ export function App({ token }: AppProps) {
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
   const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(0);
   const [serviceAction, setServiceAction] = useState<ServiceActionState>({ busy: false });
+  const [stackAction, setStackAction] = useState<StackActionState>({ busy: false });
   const [stackSearch, setStackSearch] = useState('');
   const [stackSort, setStackSort] = useState<StackSortMode>('name');
   const [workspaceForm, setWorkspaceForm] = useState<WorkspaceFormState>({ name: '', path: '', busy: false });
@@ -166,6 +168,28 @@ export function App({ token }: AppProps) {
       await refreshRuntime(selectedProject);
     } catch (error) {
       setServiceAction({ serviceName, command, busy: false, error: error instanceof Error ? error.message : 'Unable to execute service command.' });
+    }
+  }
+
+  async function executeStackCommand(project: DiscoveredComposeProject, command: string) {
+    if (stackAction.busy) return;
+
+    setStackAction({ projectId: project.id, command, busy: true });
+    try {
+      const request: CommandRequest = {
+        command,
+        composeFilePath: project.composeFilePath,
+        services: [],
+        options: {},
+        confirmed: true,
+        destructiveConfirmed: destructiveCommands.has(command),
+      };
+      const result = await apiPost<ComposeExecutionResult>(token, '/api/commands/execute', request);
+      if (result.exitCode !== 0) throw new Error(result.stderr || `Command exited with code ${result.exitCode}.`);
+      setStackAction({ projectId: project.id, command, busy: false, message: `${command} completed.` });
+      if (selectedProject?.id === project.id) await refreshRuntime(project);
+    } catch (error) {
+      setStackAction({ projectId: project.id, command, busy: false, error: error instanceof Error ? error.message : 'Unable to execute stack command.' });
     }
   }
 
@@ -382,9 +406,11 @@ export function App({ token }: AppProps) {
             }}
             onOpenCommands={() => setActiveView('commands')}
             serviceAction={serviceAction}
+            stackAction={stackAction}
             refreshInterval={refreshInterval}
             onRefreshIntervalChange={setRefreshInterval}
             onExecuteServiceCommand={(command, serviceName) => void executeServiceCommand(command, serviceName)}
+            onExecuteStackCommand={(project, command) => void executeStackCommand(project, command)}
             onRefreshRuntime={() => void refreshRuntime()}
           />
         ) : null}
@@ -718,9 +744,11 @@ function StacksView({
   onSelect,
   onOpenCommands,
   serviceAction,
+  stackAction,
   refreshInterval,
   onRefreshIntervalChange,
   onExecuteServiceCommand,
+  onExecuteStackCommand,
   onRefreshRuntime,
 }: {
   stacks?: StackListResult;
@@ -735,9 +763,11 @@ function StacksView({
   onSelect: (id: string) => void;
   onOpenCommands: () => void;
   serviceAction: ServiceActionState;
+  stackAction: StackActionState;
   refreshInterval: RefreshInterval;
   onRefreshIntervalChange: (value: RefreshInterval) => void;
   onExecuteServiceCommand: (command: string, serviceName: string) => void;
+  onExecuteStackCommand: (project: DiscoveredComposeProject, command: string) => void;
   onRefreshRuntime: () => void;
 }) {
   return (
@@ -775,7 +805,10 @@ function StacksView({
                   project={project}
                   selected={project.id === selectedId}
                   runtime={project.id === selectedId ? runtime : undefined}
+                  action={stackAction}
                   onSelect={() => onSelect(project.id)}
+                  onExecute={(command) => onExecuteStackCommand(project, command)}
+                  onOpenCommands={() => { onSelect(project.id); onOpenCommands(); }}
                 />
               ))
             )}
@@ -997,27 +1030,39 @@ function StackCard({
   project,
   selected,
   runtime,
+  action,
   onSelect,
+  onExecute,
+  onOpenCommands,
 }: {
   project: DiscoveredComposeProject;
   selected: boolean;
   runtime?: RuntimeState;
+  action: StackActionState;
   onSelect: () => void;
+  onExecute: (command: string) => void;
+  onOpenCommands: () => void;
 }) {
   const runtimeTone = runtimeToneFromState(runtime);
   const runtimeLabel = selected && runtime?.status !== undefined ? runtime.status.state : selected && runtime?.loading === true ? 'loading' : 'not loaded';
+  const running = runtime?.status?.runningServices !== undefined && runtime.status.runningServices > 0;
 
   return (
-    <button type="button" className={selected ? 'stack-card selected' : 'stack-card'} onClick={onSelect}>
-      <div className="stack-card-main">
-        <strong>{project.name}</strong>
-        <span>{project.relativePath}</span>
-      </div>
-      <div className="stack-card-meta">
-        <StatusPill tone={runtimeTone}>{runtimeLabel}</StatusPill>
-        <small>{project.services.length} services</small>
-      </div>
-    </button>
+    <article className={selected ? 'stack-card selected' : 'stack-card'}>
+      <button type="button" className="stack-card-select" onClick={onSelect} aria-label={`Select stack ${project.name}`}>
+        <div className="stack-card-main">
+          <strong>{project.name}</strong>
+          <span>{project.relativePath}</span>
+        </div>
+        <div className="stack-card-meta">
+          <StatusPill tone={runtimeTone}>{runtimeLabel}</StatusPill>
+          <small>{project.services.length} services</small>
+        </div>
+      </button>
+      <StackActionGroup projectName={project.name} running={running} known={runtime?.status !== undefined} action={action} projectId={project.id} onExecute={onExecute} onOpenCommands={onOpenCommands} />
+      {action.projectId === project.id && action.message !== undefined ? <small className="stack-action-feedback success">{action.message}</small> : null}
+      {action.projectId === project.id && action.error !== undefined ? <small className="stack-action-feedback error">{action.error}</small> : null}
+    </article>
   );
 }
 
@@ -1056,17 +1101,16 @@ function StackDetailPanel({
               <span className="muted path-text">{project.composeFilePath}</span>
             </div>
             <div className="detail-actions runtime-refresh-controls">
-              <button className="secondary" type="button" onClick={onRefreshRuntime} disabled={runtime.loading}>Refresh</button>
-              <label className="refresh-interval-control">
-                <span>Auto refresh</span>
-                <select value={refreshInterval} onChange={(event) => onRefreshIntervalChange(Number(event.target.value) as RefreshInterval)}>
+              <div className="compact-refresh-control" role="group" aria-label="Runtime refresh controls">
+                <button className="secondary refresh-icon-button" type="button" onClick={onRefreshRuntime} disabled={runtime.loading} title="Refresh runtime now" aria-label="Refresh runtime now">↻</button>
+                <select aria-label="Auto refresh interval" title="Auto refresh interval" value={refreshInterval} onChange={(event) => onRefreshIntervalChange(Number(event.target.value) as RefreshInterval)}>
                   <option value={0}>Manual</option>
                   <option value={5000}>5 sec</option>
                   <option value={10000}>10 sec</option>
                   <option value={30000}>30 sec</option>
                   <option value={60000}>1 min</option>
                 </select>
-              </label>
+              </div>
               <button type="button" onClick={onOpenCommands}>Prepare command</button>
             </div>
           </div>
@@ -1142,6 +1186,17 @@ function ServicePortLinks({ ports }: { ports: string[] }) {
       </div>
     </div>
   );
+}
+
+function StackActionGroup({ projectName, projectId, running, known, action, onExecute, onOpenCommands }: { projectName: string; projectId: string; running: boolean; known: boolean; action: StackActionState; onExecute: (command: string) => void; onOpenCommands: () => void }) {
+  const busy = action.busy && action.projectId === projectId;
+  return <div className="stack-action-group service-action-group" role="group" aria-label={`Actions for stack ${projectName}`}>
+    <ServiceActionButton label="Start stack" icon="▶" disabled={(known && running) || busy} onClick={() => onExecute('up')} />
+    <ServiceActionButton label="Restart stack" icon="↻" disabled={(known && !running) || busy} onClick={() => onExecute('restart')} />
+    <ServiceActionButton label="Stop stack" icon="■" disabled={(known && !running) || busy} onClick={() => onExecute('stop')} />
+    <ServiceActionButton label="Stack logs" icon="≡" disabled={busy} onClick={() => onExecute('logs')} />
+    <ServiceActionButton label="More stack commands" icon="⋮" disabled={busy} onClick={onOpenCommands} />
+  </div>;
 }
 
 function ServiceActionGroup({ serviceName, state, action, onExecute, onOpenCommands }: { serviceName: string; state?: string; action: ServiceActionState; onExecute: (command: string, serviceName: string) => void; onOpenCommands: () => void }) {

@@ -19,6 +19,14 @@ The command is intentionally named `compose`, because the fact that it is a CLI 
 - Start an optional local browser UI with `compose ui` to manage workspaces, inspect stacks, stream runtime/logs and preview commands.
 - Keep command descriptors UI-neutral so CLI and GUI reuse the same application services.
 
+## What is new in 0.3.0
+
+- Guided Compose service creation, update and deletion with YAML diff review.
+- Direct stack and service lifecycle actions from the local Stacks page.
+- Reliable workspace switching and `compose ui --workspace <name>` startup precedence.
+- Clickable published local ports and compact manual or automatic runtime refresh.
+- Linux Node.js 20/22 and Windows installed-package validation.
+
 ## Installation
 
 ```bash

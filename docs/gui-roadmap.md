@@ -285,8 +285,7 @@ Delivered behaviours:
 - Dirty-state guards and lazy-loaded editor assets.
 - A dedicated parity backlog and architecture decision record.
 
-Status: implemented locally; full validation, protected-branch PR and CI merge are tracked by P5.7 in
-[`dockge-compose-parity-backlog.md`](dockge-compose-parity-backlog.md).
+Status: completed in PR #55 after both required GitHub Actions workflows passed.
 
 ## Security and safety requirements
 

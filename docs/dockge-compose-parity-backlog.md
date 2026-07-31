@@ -51,7 +51,7 @@ Acceptance criteria:
 - Declared `x-dockge.urls` and network names are summarized without losing raw document content.
 - Unit and API tests cover successful reads, missing `.env` and invalid YAML.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.2 — Preview and save Compose YAML and `.env`
 
@@ -66,7 +66,7 @@ Acceptance criteria:
 - Writes are atomic per file and a failed multi-file commit is rolled back.
 - Unsupported Compose keys and comments are preserved because the reviewed raw text is committed.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.3 — Create a managed stack
 
@@ -81,7 +81,7 @@ Acceptance criteria:
 - The default document contains a usable example service.
 - Creating and deploying remain separate, visible actions.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.4 — Manipulate a stack from the workspace
 
@@ -96,7 +96,7 @@ Acceptance criteria:
 - Deploy runs `up -d --remove-orphans` after a successful document commit.
 - Output and diagnostics remain visible until the next action.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.5 — Delete an app-managed stack safely
 
@@ -111,7 +111,7 @@ Acceptance criteria:
 - No recursive deletion or broad workspace target is used.
 - The UI requires typed-name confirmation and reports what was removed.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.6 — Prevent accidental edit loss
 
@@ -125,7 +125,7 @@ Acceptance criteria:
 - Refreshing after a commit clears the dirty state.
 - Stale previews cannot be committed.
 
-Status: completed locally; pending P5.7 delivery gates.
+Status: completed.
 
 ### US P5.7 — Complete quality and delivery gates
 
@@ -140,7 +140,7 @@ Acceptance criteria:
 - A protected-branch PR passes GitHub Actions before merge.
 - Documentation and release notes explain user-visible behavior and safety limits.
 
-Status: local validation complete; protected-branch PR, CI and merge pending.
+Status: completed in PR #55 after local validation and both required GitHub Actions workflows passed.
 
 ## Follow-up epic P6 — Interactive container PTY
 

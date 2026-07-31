@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
 import { platform as getDefaultPlatform } from 'node:os';
-import { dirname, join, normalize } from 'node:path';
+import { dirname, posix, win32 } from 'node:path';
 import { execa } from 'execa';
 import { resolvePackageVersion } from '../utils/package-metadata.js';
 import { createWorkspaceStore, getCurrentWorkspace } from '../workspace/workspace-store.js';
@@ -262,7 +262,7 @@ function checkPathIncludesNpmGlobalPrefix(
   currentPlatform: NodeJS.Platform,
   environment: DoctorEnvironment,
 ): DoctorCheck {
-  const expectedExecutableDirectory = currentPlatform === 'win32' ? npmGlobalPrefix : join(npmGlobalPrefix, 'bin');
+  const expectedExecutableDirectory = currentPlatform === 'win32' ? npmGlobalPrefix : posix.join(npmGlobalPrefix, 'bin');
   const pathValue = getEnvironmentPath(environment);
 
   if (pathValue.trim().length === 0) {
@@ -419,9 +419,7 @@ function splitPathEntries(pathValue: string, currentPlatform: NodeJS.Platform): 
 
 function normalizePathForComparison(value: string, currentPlatform: NodeJS.Platform): string {
   const unquoted = value.trim().replace(/^"|"$/g, '').replace(/[\\/]+$/g, '');
-  const normalizedValue = currentPlatform === 'win32'
-    ? unquoted.replaceAll('/', '\\')
-    : normalize(unquoted);
+  const normalizedValue = (currentPlatform === 'win32' ? win32 : posix).normalize(unquoted);
 
   return currentPlatform === 'win32' ? normalizedValue.toLowerCase() : normalizedValue;
 }

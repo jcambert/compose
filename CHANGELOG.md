@@ -10,6 +10,27 @@ The project follows a pragmatic semver policy:
 
 ## Unreleased
 
+### Added
+
+- A unified Compose workspace for reading, editing, creating and deploying complete Compose YAML and `.env` documents.
+- Stack lifecycle controls, service runtime actions, declared networks, safe `x-dockge.urls` links and operation diagnostics in one local UI.
+- Exact multi-file diff previews, optimistic concurrency checks and transactional document replacement.
+- Conservative stack deletion that refuses directories containing unrelated files.
+
+### Changed
+
+- The optional local UI now lazy-loads the advanced CodeMirror YAML and environment editors.
+- Whole-document and guided service editing share the same Compose files and validation services.
+
+### Fixed
+
+- Cross-platform npm global-prefix diagnostics now use the requested platform's path semantics.
+- UI builds remove obsolete hashed assets before npm packaging.
+
+### Security
+
+- Stack creation is restricted beneath the active workspace and deletion never uses recursive filesystem removal.
+
 ## 0.3.0 - Guided Compose editing and professional local administration
 
 ### Added

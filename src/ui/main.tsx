@@ -4,6 +4,7 @@ import { App } from './App';
 import { mountStreamingWidget } from './streaming-widget';
 import './styles.css';
 import './workspace-polish.css';
+import './compose-workspace.css';
 import './streaming.css';
 import './scrollbars.css';
 

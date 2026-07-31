@@ -128,7 +128,7 @@ async function readSseUntil(response: Response, eventName: string): Promise<stri
   const decoder = new TextDecoder();
   let content = '';
 
-  while (!content.includes(`event: ${eventName}`)) {
+  while (!hasCompleteSseEvent(content, eventName)) {
     const { done, value } = await reader!.read();
 
     if (done) {
@@ -141,6 +141,16 @@ async function readSseUntil(response: Response, eventName: string): Promise<stri
   await reader!.cancel();
 
   return content;
+}
+
+function hasCompleteSseEvent(content: string, eventName: string): boolean {
+  const events = content
+    .replaceAll('\r\n', '\n')
+    .split('\n\n');
+
+  events.pop();
+
+  return events.some((event) => event.split('\n').includes(`event: ${eventName}`));
 }
 
 function apiUrl(server: LocalUiServer, path: string): string {

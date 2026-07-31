@@ -182,3 +182,46 @@ export type ComposeServiceMutationCommitResult = {
   serviceName: string;
   contentHash: string;
 };
+export type StackNetworkSummary = {
+  name: string;
+  external: boolean;
+};
+
+export type StackDocument = {
+  stackName: string;
+  composeFilePath: string;
+  envFilePath: string;
+  yaml: string;
+  env: string;
+  contentHash: string;
+  envContentHash: string;
+  envFileExists: boolean;
+  services: string[];
+  networks: StackNetworkSummary[];
+  urls: string[];
+};
+
+export type StackDocumentPreview = {
+  operation: 'create' | 'update';
+  stackName: string;
+  composeFilePath: string;
+  envFilePath: string;
+  yaml: string;
+  env: string;
+  originalContentHash: string;
+  originalEnvContentHash: string;
+  originalEnvFileExists: boolean;
+  composeDiff: string;
+  envDiff: string;
+  diff: string;
+  validation: { success: true; errors: [] };
+  services: string[];
+  networks: StackNetworkSummary[];
+  urls: string[];
+};
+
+export type DeleteStackDocumentResult = {
+  stackName: string;
+  directoryPath: string;
+  removedFiles: string[];
+};

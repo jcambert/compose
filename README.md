@@ -227,6 +227,7 @@ The local UI:
 - protects the browser session and API with a short-lived token
 - serves bundled React assets locally from `dist/ui`
 - shows doctor diagnostics, workspaces, stacks, runtime summaries and command previews
+- edits, creates and deploys complete Compose YAML and `.env` documents after validation and exact diff review
 - manages saved workspaces from the browser: create, edit path, select current and remove with confirmation
 - streams selected stack runtime updates and live Docker Compose logs through Server-Sent Events
 - keeps the current workspace visually distinct and hides destructive removal behind an explicit confirmation
@@ -240,7 +241,7 @@ Workspace management in the UI uses the same local user config as the CLI. Savin
 
 Live streaming is read-only. It uses token-protected Server-Sent Events for selected stack runtime updates and `docker compose logs --follow` output.
 
-See [`docs/local-ui-server.md`](docs/local-ui-server.md), [`docs/gui-streaming.md`](docs/gui-streaming.md), [`docs/compose-error-reporting.md`](docs/compose-error-reporting.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
+See [`docs/compose-workspace.md`](docs/compose-workspace.md), [`docs/local-ui-server.md`](docs/local-ui-server.md), [`docs/gui-streaming.md`](docs/gui-streaming.md), [`docs/compose-error-reporting.md`](docs/compose-error-reporting.md) and [`docs/gui-roadmap.md`](docs/gui-roadmap.md) for details.
 
 ## Guided mode
 

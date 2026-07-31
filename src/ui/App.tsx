@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { ComposeWorkspaceView } from './ComposeWorkspaceView';
 import { ServicesView } from './ServicesView';
 import { extractPublishedHostPorts } from './service-runtime-ui';
 import {
@@ -21,7 +22,7 @@ type AppProps = {
   token: string;
 };
 
-type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'services' | 'doctor' | 'commands';
+type AppView = 'dashboard' | 'workspaces' | 'stacks' | 'compose' | 'services' | 'doctor' | 'commands';
 type StackSortMode = 'name' | 'path' | 'services' | 'runtime';
 type RefreshInterval = 0 | 5000 | 10000 | 30000 | 60000;
 type ServiceActionState = { serviceName?: string; command?: string; busy: boolean; message?: string; error?: string };
@@ -78,6 +79,7 @@ const destructiveCommands = new Set(['down', 'kill', 'rm']);
 
 export function App({ token }: AppProps) {
   const [activeView, setActiveView] = useState<AppView>('dashboard');
+  const [composeDirty, setComposeDirty] = useState(false);
   const [state, setState] = useState<LoadState>({ loading: true });
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [runtime, setRuntime] = useState<RuntimeState>({ loading: false });
@@ -110,7 +112,7 @@ export function App({ token }: AppProps) {
     [runtime, selectedProject, state],
   );
 
-  async function load(options: { resetSelection?: boolean } = {}) {
+  async function load(options: { resetSelection?: boolean; preferredComposeFilePath?: string } = {}) {
     setState((current) => ({ ...current, loading: true, error: undefined }));
 
     try {
@@ -122,13 +124,40 @@ export function App({ token }: AppProps) {
       ]);
 
       setState({ loading: false, health, doctor, workspaces, stacks });
-      setSelectedId((current) => currentProjectOrFirst(options.resetSelection === true ? undefined : current, stacks.stacks));
+      const preferredProject = stacks.stacks.find(
+        (project) => project.composeFilePath === options.preferredComposeFilePath,
+      );
+      setSelectedId((current) => preferredProject?.id
+        ?? currentProjectOrFirst(options.resetSelection === true ? undefined : current, stacks.stacks));
       if (options.resetSelection === true) {
         setRuntime({ loading: false });
       }
     } catch (error) {
       setState({ loading: false, error: error instanceof Error ? error.message : 'Unable to load compose data.' });
     }
+  }
+
+  function navigateTo(view: AppView) {
+    if (
+      activeView === 'compose'
+      && view !== 'compose'
+      && composeDirty
+      && !window.confirm('Discard the unsaved Compose document changes?')
+    ) {
+      return;
+    }
+
+    setActiveView(view);
+  }
+
+  async function handleComposeProjectChanged(composeFilePath?: string) {
+    setComposeDirty(false);
+    await load({
+      ...(composeFilePath === undefined
+        ? { resetSelection: true }
+        : { preferredComposeFilePath: composeFilePath }),
+    });
+    if (composeFilePath === undefined) setActiveView('stacks');
   }
 
   async function refreshRuntime(project: DiscoveredComposeProject | undefined = selectedProject) {
@@ -337,7 +366,7 @@ export function App({ token }: AppProps) {
   }, [selectedProject, token]);
 
   useEffect(() => {
-    if (activeView !== 'stacks' || selectedProject === undefined || refreshInterval === 0) return;
+    if (!['stacks', 'compose'].includes(activeView) || selectedProject === undefined || refreshInterval === 0) return;
     const timer = window.setInterval(() => {
       if (!document.hidden) void refreshRuntime(selectedProject);
     }, refreshInterval);
@@ -349,7 +378,7 @@ export function App({ token }: AppProps) {
 
   return (
     <div className="app-frame">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} summary={summary} />
+      <Sidebar activeView={activeView} setActiveView={navigateTo} summary={summary} />
       <main className="app-shell">
         <TopBar
           loading={state.loading || workspaceForm.busy}
@@ -405,6 +434,7 @@ export function App({ token }: AppProps) {
               clearCommandFeedback(setForm);
             }}
             onOpenCommands={() => setActiveView('commands')}
+            onOpenCompose={() => setActiveView('compose')}
             serviceAction={serviceAction}
             stackAction={stackAction}
             refreshInterval={refreshInterval}
@@ -412,6 +442,20 @@ export function App({ token }: AppProps) {
             onExecuteServiceCommand={(command, serviceName) => void executeServiceCommand(command, serviceName)}
             onExecuteStackCommand={(project, command) => void executeStackCommand(project, command)}
             onRefreshRuntime={() => void refreshRuntime()}
+          />
+        ) : null}
+
+        {activeView === 'compose' ? (
+          <ComposeWorkspaceView
+            token={token}
+            project={selectedProject}
+            runtime={runtime.status}
+            workspaceRoot={state.stacks?.root}
+            onChooseStack={() => navigateTo('stacks')}
+            onOpenGuidedEditor={() => navigateTo('services')}
+            onRuntimeRefresh={() => refreshRuntime()}
+            onProjectChanged={handleComposeProjectChanged}
+            onDirtyChange={setComposeDirty}
           />
         ) : null}
 
@@ -465,6 +509,7 @@ function Sidebar({
         <NavButton active={activeView === 'dashboard'} label="Dashboard" description="Overview" onClick={() => setActiveView('dashboard')} />
         <NavButton active={activeView === 'workspaces'} label="Workspaces" description={`${summary.workspaceCount} saved`} onClick={() => setActiveView('workspaces')} />
         <NavButton active={activeView === 'stacks'} label="Stacks" description={`${summary.stackCount} projects`} onClick={() => setActiveView('stacks')} />
+        <NavButton active={activeView === 'compose'} label="Compose" description="Edit and deploy" onClick={() => setActiveView('compose')} />
         <NavButton active={activeView === 'services'} label="Services" description="Guided YAML editor" onClick={() => setActiveView('services')} />
         <NavButton active={activeView === 'doctor'} label="Doctor" description={summary.doctorIssues === 0 ? 'Healthy' : `${summary.doctorIssues} issues`} onClick={() => setActiveView('doctor')} />
         <NavButton active={activeView === 'commands'} label="Commands" description="Preview first" onClick={() => setActiveView('commands')} />
@@ -743,6 +788,7 @@ function StacksView({
   setSort,
   onSelect,
   onOpenCommands,
+  onOpenCompose,
   serviceAction,
   stackAction,
   refreshInterval,
@@ -762,6 +808,7 @@ function StacksView({
   setSort: (value: StackSortMode) => void;
   onSelect: (id: string) => void;
   onOpenCommands: () => void;
+  onOpenCompose: () => void;
   serviceAction: ServiceActionState;
   stackAction: StackActionState;
   refreshInterval: RefreshInterval;
@@ -813,7 +860,7 @@ function StacksView({
               ))
             )}
           </div>
-          <StackDetailPanel project={selectedProject} runtime={runtime} serviceAction={serviceAction} refreshInterval={refreshInterval} onRefreshIntervalChange={onRefreshIntervalChange} onExecuteServiceCommand={onExecuteServiceCommand} onOpenCommands={onOpenCommands} onRefreshRuntime={onRefreshRuntime} />
+          <StackDetailPanel project={selectedProject} runtime={runtime} serviceAction={serviceAction} refreshInterval={refreshInterval} onRefreshIntervalChange={onRefreshIntervalChange} onExecuteServiceCommand={onExecuteServiceCommand} onOpenCommands={onOpenCommands} onOpenCompose={onOpenCompose} onRefreshRuntime={onRefreshRuntime} />
         </div>
       </Panel>
     </div>
@@ -1074,6 +1121,7 @@ function StackDetailPanel({
   onRefreshIntervalChange,
   onExecuteServiceCommand,
   onOpenCommands,
+  onOpenCompose,
   onRefreshRuntime,
 }: {
   project?: DiscoveredComposeProject;
@@ -1083,6 +1131,7 @@ function StackDetailPanel({
   onRefreshIntervalChange: (value: RefreshInterval) => void;
   onExecuteServiceCommand: (command: string, serviceName: string) => void;
   onOpenCommands: () => void;
+  onOpenCompose: () => void;
   onRefreshRuntime: () => void;
 }) {
   const services = project?.services ?? [];
@@ -1111,6 +1160,7 @@ function StackDetailPanel({
                   <option value={60000}>1 min</option>
                 </select>
               </div>
+              <button className="secondary" type="button" onClick={onOpenCompose}>Open Compose</button>
               <button type="button" onClick={onOpenCommands}>Prepare command</button>
             </div>
           </div>

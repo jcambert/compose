@@ -1,5 +1,8 @@
 # Product Backlog
 
+The active Dockge Compose-page parity initiative is tracked in
+[`dockge-compose-parity-backlog.md`](./dockge-compose-parity-backlog.md).
+
 ## Product vision
 
 `compose` is a professional CLI for developers who already have Docker Compose projects and want to discover, inspect, operate, edit and diagnose them from a clean workflow.

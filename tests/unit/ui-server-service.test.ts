@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ComposeApplicationCommandInput, ComposeApplicationCommandResult } from '../../src/app/compose-command-service.js';
+import type { StackDocument, StackDocumentPreview } from '../../src/app/stack-document-service.js';
 import { startLocalUiServer } from '../../src/app/ui-server-service.js';
 import type { LocalUiServer, LocalUiServerDependencies, LocalUiServerOptions } from '../../src/app/ui-server-service.js';
 import type { BuiltComposeCommand } from '../../src/compose/compose-command.js';
@@ -87,6 +88,27 @@ function createDependencies(overrides: LocalUiServerDependencies = {}): LocalUiS
     commitComposeServiceMutation: async (input) => ({
       composeFilePath: input.preview.composeFilePath, operation: input.preview.operation, serviceName: input.preview.serviceName, contentHash: 'hash-after',
     }),
+    readStackDocument: async () => createStackDocument(),
+    previewStackDocumentUpdate: async (input) => createStackPreview(
+      'update',
+      'infra',
+      input.composeFilePath,
+      input.yaml,
+      input.env,
+    ),
+    previewStackCreation: async (input) => createStackPreview(
+      'create',
+      input.stackName,
+      join(input.workspaceRoot, input.stackName, 'compose.yaml'),
+      input.yaml,
+      input.env,
+    ),
+    commitStackDocument: async (input) => createStackDocument(input.preview),
+    deleteStackDocument: async (input) => ({
+      stackName: input.confirmedStackName,
+      directoryPath: '/workspace/infra',
+      removedFiles: [input.composeFilePath],
+    }),
     executeCommand: async (input: ComposeApplicationCommandInput): Promise<ComposeApplicationCommandResult> => ({
       command: `docker compose ${input.command}`,
       exitCode: 0,
@@ -111,6 +133,51 @@ function createServicePreview(operation: ComposeServiceMutationPreview['operatio
     operation, composeFilePath: project.composeFilePath, serviceName, originalContentHash: 'hash-before',
     diff: `--- before\n+++ after\n+${serviceName}`, nextContent: `services:\n  ${serviceName}: {}`,
     validation: { success: true, errors: [] }, warnings: [],
+  };
+}
+
+function createStackDocument(source: Partial<StackDocument> = {}): StackDocument {
+  const composeFilePath = source.composeFilePath ?? project.composeFilePath;
+  return {
+    stackName: source.stackName ?? 'infra',
+    composeFilePath,
+    envFilePath: source.envFilePath ?? composeFilePath.replace(/[^/\\]+$/, '.env'),
+    yaml: source.yaml ?? 'services:\n  api:\n    image: example/api:latest\n',
+    env: source.env ?? 'PORT=8080\n',
+    contentHash: source.contentHash ?? 'compose-hash',
+    envContentHash: source.envContentHash ?? 'env-hash',
+    envFileExists: source.envFileExists ?? true,
+    services: source.services ?? ['api'],
+    networks: source.networks ?? [],
+    urls: source.urls ?? [],
+  };
+}
+
+function createStackPreview(
+  operation: StackDocumentPreview['operation'],
+  stackName: string,
+  composeFilePath: string,
+  yaml: string,
+  env: string,
+): StackDocumentPreview {
+  const document = createStackDocument({ stackName, composeFilePath, yaml, env });
+  return {
+    operation,
+    stackName,
+    composeFilePath,
+    envFilePath: document.envFilePath,
+    yaml,
+    env,
+    originalContentHash: 'compose-hash',
+    originalEnvContentHash: 'env-hash',
+    originalEnvFileExists: operation === 'update',
+    composeDiff: '--- compose-before\n+++ compose-after\n',
+    envDiff: '--- env-before\n+++ env-after\n',
+    diff: '--- compose-before\n+++ compose-after\n--- env-before\n+++ env-after\n',
+    validation: { success: true, errors: [] },
+    services: document.services,
+    networks: document.networks,
+    urls: document.urls,
   };
 }
 
@@ -339,6 +406,60 @@ describe('local UI server application service', () => {
     }
   });
 
+  it('reads, previews, commits, creates and safely deletes stack documents', async () => {
+    const server = await startTestServer();
+
+    try {
+      const stackPath = `/api/stacks/${encodeURIComponent(project.id)}/compose`;
+      const read = await getJson(server, stackPath);
+      const updatePreview = await postJson(server, `${stackPath}/preview`, {
+        yaml: 'services:\n  api:\n    image: example/api:v2\n',
+        env: 'PORT=9090\n',
+      });
+      const updated = await postJson(server, `${stackPath}/commit`, { preview: updatePreview });
+      const createPreview = await postJson(server, '/api/stacks/preview', {
+        stackName: 'demo',
+        yaml: 'services:\n  web:\n    image: nginx\n',
+        env: '',
+      });
+      const created = await postJson(server, '/api/stacks/commit', { preview: createPreview });
+      const deleted = await postJson(server, `${stackPath}/delete`, {
+        expectedContentHash: 'compose-hash',
+        expectedEnvContentHash: 'env-hash',
+        confirmedStackName: 'infra',
+      });
+
+      expect(read).toMatchObject({ stackName: 'infra', services: ['api'] });
+      expect(updatePreview).toMatchObject({ operation: 'update', env: 'PORT=9090\n' });
+      expect(updated).toMatchObject({ stackName: 'infra', env: 'PORT=9090\n' });
+      expect(createPreview).toMatchObject({ operation: 'create', stackName: 'demo' });
+      expect(created).toMatchObject({ stackName: 'demo' });
+      expect(deleted).toMatchObject({ stackName: 'infra', removedFiles: [project.composeFilePath] });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects malformed or mismatched stack document requests', async () => {
+    const server = await startTestServer();
+
+    try {
+      const stackPath = `/api/stacks/${encodeURIComponent(project.id)}/compose`;
+      expect((await post(server, `${stackPath}/preview`, { yaml: '', env: '' })).status).toBe(400);
+      expect((await post(server, '/api/stacks/preview', {
+        stackName: 'demo',
+        yaml: 'services: {}',
+        env: 42,
+      })).status).toBe(400);
+      expect((await post(server, `${stackPath}/commit`, {
+        preview: createStackPreview('create', 'demo', '/workspace/demo/compose.yaml', 'services: {}', ''),
+      })).status).toBe(400);
+      expect((await get(server, '/api/stacks/missing/compose')).status).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('previews commands and requires confirmation before execution', async () => {
     const server = await startTestServer();
 
@@ -447,6 +568,10 @@ async function getJson(server: LocalUiServer, path: string): Promise<Record<stri
 
   expect(response.status).toBe(200);
   return await response.json() as Record<string, unknown>;
+}
+
+async function get(server: LocalUiServer, path: string): Promise<Response> {
+  return fetch(apiUrl(server, path), { headers: authorizationHeaders() });
 }
 
 async function postJson(server: LocalUiServer, path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {

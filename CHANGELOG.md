@@ -1,3 +1,5 @@
+- Add direct stack-level actions to the Stacks list and compact the manual/automatic runtime refresh control.
+
 - Make every published service port clickable from the Stacks page, opening `http://localhost:<port>` in a new browser tab.
 
 - Honor `compose ui --workspace <name>` by activating that workspace before the local UI server starts; without the option, the last active workspace remains in use.

@@ -13,6 +13,7 @@ import type { ProcessRunner } from '../compose/compose-executor.js';
 import type { StackRuntimeStatus } from '../interactive/stack-runtime-status.js';
 import { readStackRuntimeStatus } from '../interactive/stack-runtime-status.js';
 import type { DiscoveredComposeProject } from '../scanner/discovered-project.js';
+import { ComposeProjectError, ComposeYamlError } from '../utils/errors.js';
 import { executeComposeApplicationCommand, previewComposeApplicationCommand } from './compose-command-service.js';
 import {
   commitComposeServiceMutation,
@@ -33,6 +34,21 @@ import type {
   ComposeApplicationCommandOptions,
   ComposeApplicationCommandResult,
 } from './compose-command-service.js';
+import {
+  commitStackDocument,
+  deleteStackDocument,
+  previewStackCreation,
+  previewStackDocumentUpdate,
+  readStackDocument,
+  StackDocumentConflictError,
+  type CommitStackDocumentInput,
+  type DeleteStackDocumentInput,
+  type DeleteStackDocumentResult,
+  type PreviewStackCreationInput,
+  type PreviewStackDocumentUpdateInput,
+  type StackDocument,
+  type StackDocumentPreview,
+} from './stack-document-service.js';
 import { runDoctor } from './doctor-service.js';
 import type { DoctorOptions, DoctorReport } from './doctor-service.js';
 import { scanComposeProjects } from './scan-service.js';
@@ -97,6 +113,11 @@ export type LocalUiServerDependencies = {
   previewUpdateComposeService?: (input: PreviewUpdateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
   previewDeleteComposeService?: (input: PreviewDeleteComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
   commitComposeServiceMutation?: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;
+  readStackDocument?: (composeFilePath: string) => Promise<StackDocument>;
+  previewStackDocumentUpdate?: (input: PreviewStackDocumentUpdateInput) => Promise<StackDocumentPreview>;
+  previewStackCreation?: (input: PreviewStackCreationInput) => Promise<StackDocumentPreview>;
+  commitStackDocument?: (input: CommitStackDocumentInput) => Promise<StackDocument>;
+  deleteStackDocument?: (input: DeleteStackDocumentInput) => Promise<DeleteStackDocumentResult>;
 };
 
 type RuntimeDependencies = {
@@ -116,6 +137,11 @@ type RuntimeDependencies = {
   previewUpdateComposeService: (input: PreviewUpdateComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
   previewDeleteComposeService: (input: PreviewDeleteComposeServiceInput) => Promise<ComposeServiceMutationPreview>;
   commitComposeServiceMutation: (input: CommitComposeServiceMutationInput) => Promise<ComposeServiceMutationCommitResult>;
+  readStackDocument: (composeFilePath: string) => Promise<StackDocument>;
+  previewStackDocumentUpdate: (input: PreviewStackDocumentUpdateInput) => Promise<StackDocumentPreview>;
+  previewStackCreation: (input: PreviewStackCreationInput) => Promise<StackDocumentPreview>;
+  commitStackDocument: (input: CommitStackDocumentInput) => Promise<StackDocument>;
+  deleteStackDocument: (input: DeleteStackDocumentInput) => Promise<DeleteStackDocumentResult>;
 };
 
 type RequestContext = {
@@ -300,6 +326,32 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/stacks/preview') {
+      const scanContext = await resolveStackScanContext(url, context);
+      const payload = parseStackCreationPayload(await readRequestJson(request), scanContext.root);
+      sendJson(
+        response,
+        200,
+        await context.dependencies.previewStackCreation(payload),
+      );
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/stacks/commit') {
+      const scanContext = await resolveStackScanContext(url, context);
+      const payload = parseStackDocumentCommitPayload(await readRequestJson(request));
+      if (payload.preview.operation !== 'create') {
+        throw new LocalUiHttpError(400, 'invalid-preview', 'Stack creation requires a create preview.');
+      }
+
+      sendJson(
+        response,
+        200,
+        await context.dependencies.commitStackDocument({ ...payload, workspaceRoot: scanContext.root }),
+      );
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/events/runtime') {
       await streamRuntimeEvents(request, response, context, await resolveProjectFromQuery(url, context), url);
       return;
@@ -324,6 +376,58 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
 
       sendJson(response, 200, await context.dependencies.readRuntimeStatus(project));
       return;
+    }
+
+    const stackDocumentMatch = matchStackDocumentPath(url.pathname);
+
+    if (stackDocumentMatch !== undefined) {
+      const scanContext = await resolveStackScanContext(url, context);
+      const stacks = await scanProjects(scanContext, context.dependencies);
+      const project = findProject(stacks, stackDocumentMatch.stackId);
+
+      if (project === undefined) {
+        sendError(response, 404, 'stack-not-found', 'Stack not found: ' + stackDocumentMatch.stackId);
+        return;
+      }
+
+      if (request.method === 'GET' && stackDocumentMatch.action === 'read') {
+        sendJson(response, 200, await context.dependencies.readStackDocument(project.composeFilePath));
+        return;
+      }
+
+      if (request.method === 'POST' && stackDocumentMatch.action === 'preview') {
+        const payload = parseStackDocumentUpdatePayload(
+          await readRequestJson(request),
+          project.composeFilePath,
+        );
+        sendJson(response, 200, await context.dependencies.previewStackDocumentUpdate(payload));
+        return;
+      }
+
+      if (request.method === 'POST' && stackDocumentMatch.action === 'commit') {
+        const payload = parseStackDocumentCommitPayload(await readRequestJson(request));
+        if (payload.preview.operation !== 'update') {
+          throw new LocalUiHttpError(400, 'invalid-preview', 'Stack update requires an update preview.');
+        }
+        sendJson(
+          response,
+          200,
+          await context.dependencies.commitStackDocument({
+            ...payload,
+            composeFilePath: project.composeFilePath,
+          }),
+        );
+        return;
+      }
+
+      if (request.method === 'POST' && stackDocumentMatch.action === 'delete') {
+        const payload = parseStackDocumentDeletePayload(
+          await readRequestJson(request),
+          project.composeFilePath,
+        );
+        sendJson(response, 200, await context.dependencies.deleteStackDocument(payload));
+        return;
+      }
     }
 
     const serviceEditingMatch = matchStackServicesPath(url.pathname);
@@ -391,6 +495,16 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
 
+    if (error instanceof StackDocumentConflictError) {
+      sendError(response, 409, 'stack-document-conflict', error.message);
+      return;
+    }
+
+    if (error instanceof ComposeProjectError || error instanceof ComposeYamlError) {
+      sendError(response, 400, 'invalid-compose-document', error.message);
+      return;
+    }
+
     sendError(response, 500, 'internal-error', error instanceof Error ? error.message : 'Unexpected local UI server error.');
   }
 }
@@ -413,6 +527,11 @@ function createRuntimeDependencies(dependencies: LocalUiServerDependencies): Run
     previewUpdateComposeService: dependencies.previewUpdateComposeService ?? previewUpdateComposeService,
     previewDeleteComposeService: dependencies.previewDeleteComposeService ?? previewDeleteComposeService,
     commitComposeServiceMutation: dependencies.commitComposeServiceMutation ?? commitComposeServiceMutation,
+    readStackDocument: dependencies.readStackDocument ?? readStackDocument,
+    previewStackDocumentUpdate: dependencies.previewStackDocumentUpdate ?? previewStackDocumentUpdate,
+    previewStackCreation: dependencies.previewStackCreation ?? previewStackCreation,
+    commitStackDocument: dependencies.commitStackDocument ?? commitStackDocument,
+    deleteStackDocument: dependencies.deleteStackDocument ?? deleteStackDocument,
   };
 }
 
@@ -792,6 +911,70 @@ function parseServiceCommitPayload(value: unknown): CommitComposeServiceMutation
   return { preview: value.preview as unknown as ComposeServiceMutationPreview };
 }
 
+function parseStackDocumentUpdatePayload(
+  value: unknown,
+  composeFilePath: string,
+): PreviewStackDocumentUpdateInput {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Stack document request body must be a JSON object.');
+  }
+
+  return {
+    composeFilePath,
+    yaml: readDocumentText(value.yaml, 'yaml', false),
+    env: readDocumentText(value.env, 'env', true),
+  };
+}
+
+function parseStackCreationPayload(
+  value: unknown,
+  workspaceRoot: string,
+): PreviewStackCreationInput {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Stack creation request body must be a JSON object.');
+  }
+
+  return {
+    workspaceRoot,
+    stackName: readRequiredString(value.stackName, 'stackName'),
+    yaml: readDocumentText(value.yaml, 'yaml', false),
+    env: readDocumentText(value.env, 'env', true),
+  };
+}
+
+function parseStackDocumentCommitPayload(value: unknown): Pick<CommitStackDocumentInput, 'preview'> {
+  if (!isObject(value) || !isObject(value.preview)) {
+    throw new LocalUiHttpError(400, 'invalid-preview', 'Stack commit request requires a preview object.');
+  }
+
+  return { preview: value.preview as unknown as StackDocumentPreview };
+}
+
+function parseStackDocumentDeletePayload(
+  value: unknown,
+  composeFilePath: string,
+): DeleteStackDocumentInput {
+  if (!isObject(value)) {
+    throw new LocalUiHttpError(400, 'invalid-json', 'Stack deletion request body must be a JSON object.');
+  }
+
+  return {
+    composeFilePath,
+    expectedContentHash: readRequiredString(value.expectedContentHash, 'expectedContentHash'),
+    expectedEnvContentHash: readRequiredString(value.expectedEnvContentHash, 'expectedEnvContentHash'),
+    confirmedStackName: readRequiredString(value.confirmedStackName, 'confirmedStackName'),
+  };
+}
+
+function readDocumentText(value: unknown, fieldName: string, allowEmpty: boolean): string {
+  if (typeof value !== 'string' || (!allowEmpty && value.trim().length === 0)) {
+    const qualifier = allowEmpty ? 'a string' : 'a non-empty string';
+    throw new LocalUiHttpError(400, 'invalid-string', fieldName + ' must be ' + qualifier + '.');
+  }
+
+  return value;
+}
+
 function readOptions(value: unknown): ComposeApplicationCommandOptions {
   if (value === undefined) {
     return {};
@@ -935,6 +1118,27 @@ function matchWorkspacePath(pathname: string): string | undefined {
 function matchStackRuntimePath(pathname: string): string | undefined {
   const match = /^\/api\/stacks\/([^/]+)\/runtime$/.exec(pathname);
   return match?.[1] === undefined ? undefined : decodeURIComponent(match[1]);
+}
+
+type StackDocumentRoute = {
+  stackId: string;
+  action: 'read' | 'preview' | 'commit' | 'delete';
+};
+
+function matchStackDocumentPath(pathname: string): StackDocumentRoute | undefined {
+  const match = /^\/api\/stacks\/([^/]+)\/compose(?:\/(preview|commit|delete))?$/.exec(pathname);
+  if (match?.[1] === undefined) {
+    return undefined;
+  }
+
+  const action = match[2];
+
+  return {
+    stackId: decodeURIComponent(match[1]),
+    action: action === 'preview' || action === 'commit' || action === 'delete'
+      ? action
+      : 'read',
+  };
 }
 
 type StackServicesRoute = {

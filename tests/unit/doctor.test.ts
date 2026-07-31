@@ -92,6 +92,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createSuccessfulRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
     });
 
     expect(report.ok).toBe(true);
@@ -118,6 +119,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createSuccessfulRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       skipDocker: true,
     });
 
@@ -135,6 +137,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createFailingDockerRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       skipDocker: true,
     });
 
@@ -152,6 +155,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createFailingDockerRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
     });
 
     expect(report.ok).toBe(false);
@@ -168,6 +172,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createMissingComposeExecutableRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       skipDocker: true,
     });
 
@@ -187,6 +192,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createSuccessfulRunner(),
       environment: createPathEnvironment('/bin'),
+      platform: 'linux',
       skipDocker: true,
     });
 
@@ -206,6 +212,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createFailingNpmRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       skipDocker: true,
     });
 
@@ -225,6 +232,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createSuccessfulRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       strict: true,
     });
 
@@ -241,6 +249,7 @@ describe('doctor diagnostics', () => {
       workspaceStore: store,
       commandRunner: createSuccessfulRunner(),
       environment: createPathEnvironment(),
+      platform: 'linux',
       skipDocker: true,
     });
 

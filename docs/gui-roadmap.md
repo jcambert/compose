@@ -248,33 +248,45 @@ Delivered design outputs:
 
 Status: completed in PR #40.
 
-## Next delivery plan
+## Compose editing delivery
 
 ### Step 15 — Add Compose document editing service
 
-Implement the shared application service and YAML mutation layer.
+Delivered behaviours:
 
-Expected behaviours:
+- Shared application service for reading and validating selected Compose files.
+- Targeted service create, update and delete mutations.
+- Exact YAML diff preview before save.
+- Optimistic file-change protection.
+- Preservation of unsupported service and top-level keys.
 
-- Read the selected stack Compose file.
-- Return editable service summaries.
-- Create a basic service.
-- Update common service fields.
-- Delete a service with explicit confirmation data.
-- Validate before saving.
-- Preserve unsupported YAML sections.
+Status: completed.
 
 ### Step 16 — Expose guided service editing in the local UI
 
-Add the browser experience for non-specialist users.
+Delivered behaviours:
 
-Expected behaviours:
+- Guided forms for common service fields.
+- Create and delete workflows with explicit confirmation.
+- Diff review, validation errors and structured diagnostics.
+- Shared runtime and lifecycle actions.
 
-- Open a Compose file/service from the selected stack.
-- Edit common service fields from guided forms.
-- Create and delete services with clear confirmations.
-- Show YAML diff preview before save.
-- Surface validation errors and diagnostics clearly.
+Status: completed.
+
+### Step 17 — Deliver a unified Dockge-style Compose workspace
+
+Delivered behaviours:
+
+- Complete Compose YAML and `.env` editing with syntax highlighting.
+- Stack creation, save-draft and deploy workflows.
+- Stack and service lifecycle actions, operation output and runtime status.
+- Network and safe `x-dockge.urls` summaries.
+- Transactional replacement, optimistic concurrency and conservative stack deletion.
+- Dirty-state guards and lazy-loaded editor assets.
+- A dedicated parity backlog and architecture decision record.
+
+Status: implemented locally; full validation, protected-branch PR and CI merge are tracked by P5.7 in
+[`dockge-compose-parity-backlog.md`](dockge-compose-parity-backlog.md).
 
 ## Security and safety requirements
 

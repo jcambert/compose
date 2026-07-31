@@ -1,0 +1,195 @@
+.compose-workspace-view {
+  min-width: 0;
+}
+
+.compose-workspace-hero {
+  align-items: flex-start;
+}
+
+.compose-lifecycle-actions {
+  max-width: 720px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.compose-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, .85fr) minmax(440px, 1.35fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.compose-stack-column,
+.compose-document-column {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.compose-editor-panel {
+  overflow: hidden;
+}
+
+.compose-code-editor {
+  overflow: hidden;
+  border: 1px solid rgba(96, 165, 250, .22);
+  border-radius: .9rem;
+  background: #282a36;
+}
+
+.compose-code-editor .cm-editor {
+  font-size: .86rem;
+}
+
+.compose-code-editor .cm-scroller {
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+
+.compose-code-editor .cm-focused {
+  outline: 2px solid rgba(96, 165, 250, .6);
+  outline-offset: -2px;
+}
+
+.env-code-editor {
+  border-color: rgba(167, 139, 250, .28);
+}
+
+.editor-actions {
+  margin-top: 1rem;
+}
+
+.compose-url-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.compose-url-list a {
+  border: 1px solid rgba(96, 165, 250, .34);
+  border-radius: 999px;
+  padding: .5rem .75rem;
+  background: rgba(37, 99, 235, .14);
+  color: #bfdbfe;
+  font-size: .82rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.compose-url-list a:hover {
+  border-color: #60a5fa;
+  background: rgba(37, 99, 235, .24);
+}
+
+.compose-service-list {
+  display: grid;
+  gap: .7rem;
+}
+
+.compose-service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  padding: .8rem;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: .9rem;
+  background: rgba(15, 23, 42, .52);
+}
+
+.compose-service-row > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .55rem;
+  min-width: 0;
+}
+
+.compose-service-row small {
+  color: #94a3b8;
+}
+
+.compose-service-row .actions {
+  justify-content: flex-end;
+}
+
+.compose-service-row button {
+  padding: .5rem .65rem;
+  font-size: .78rem;
+}
+
+.network-summary {
+  display: grid;
+  gap: .55rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, .14);
+}
+
+.network-summary > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.stack-document-preview .yaml-diff,
+.operation-console pre {
+  max-height: 430px;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.operation-console pre {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid rgba(34, 197, 94, .2);
+  border-radius: .9rem;
+  background: #050b16;
+  color: #d1fae5;
+  font: .83rem/1.55 "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+
+.stack-delete-zone {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(220px, 360px) auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.stack-delete-zone p {
+  margin-bottom: 0;
+}
+
+.stack-delete-zone label {
+  margin: 0;
+}
+
+@media (max-width: 1180px) {
+  .compose-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compose-document-column {
+    grid-row: 1;
+  }
+
+  .stack-delete-zone {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .compose-service-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .compose-service-row .actions {
+    justify-content: flex-start;
+  }
+
+  .compose-lifecycle-actions {
+    justify-content: flex-start;
+  }
+}
